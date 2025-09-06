@@ -1,0 +1,90 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "commonjs",
+    "lib": ["ES2023"],
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "outDir": "./dist",
+    "rootDir": "./src",
+    "resolveJsonModule": true,
+    "sourceMap": true,
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["src/*"]
+    },
+    "allowSyntheticDefaultImports": true,
+    "allowJs": false,
+    "noImplicitAny": true,
+    "noImplicitReturns": true,
+    "noImplicitThis": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "exactOptionalPropertyTypes": true,
+    "noImplicitOverride": true,
+    "noPropertyAccessFromIndexSignature": true,
+    "noUncheckedIndexedAccess": true,
+    "removeComments": false,
+    "preserveConstEnums": true,
+    "declaration": true,
+    "declarationMap": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true,
+    "strictNullChecks": true,
+    "strictFunctionTypes": true,
+    "strictBindCallApply": true,
+    "strictPropertyInitialization": true,
+    "noFallthroughCasesInSwitch": true,
+    "noImplicitFallthrough": true,
+    "incremental": true,
+    "tsBuildInfoFile": "./dist/.tsbuildinfo",
+    "typeRoots": ["./node_modules/@types", "./src/types"],
+    "types": ["node", "jest"],
+    "moduleResolution": "node",
+    "isolatedModules": true,
+    "noEmitOnError": true,
+    "preserveWatchOutput": true,
+    "pretty": true,
+    "newLine": "lf",
+    "importHelpers": true,
+    "downlevelIteration": true,
+    "noErrorTruncation": true,
+    "stripInternal": true
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "**/*.test.ts",
+    "**/*.spec.ts",
+    "**/test/**/*",
+    "**/tests/**/*",
+    "dist",
+    "build",
+    "coverage",
+    "docs",
+    "**/*.d.ts",
+    "**/*.js",
+    "**/*.jsx"
+  ],
+  "ts-node": {
+    "esm": false,
+    "experimentalSpecifierResolution": "node",
+    "transpileOnly": false,
+    "files": true,
+    "compilerOptions": {
+      "module": "commonjs",
+      "target": "ES2023"
+    }
+  },
+  "watchOptions": {
+    "watchFile": "useFsEvents",
+    "watchDirectory": "useFsEvents",
+    "fallbackPolling": "dynamicPriority",
+    "synchronousWatchDirectory": true,
+    "excludeDirectories": ["**/node_modules", "**/dist"]
+  }
+}
