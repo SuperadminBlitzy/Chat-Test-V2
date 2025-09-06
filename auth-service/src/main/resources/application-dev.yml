@@ -1,0 +1,320 @@
+# Authentication Service Development Environment Configuration
+# This configuration overrides default application.yml properties for development-specific settings
+# including database connections, logging levels, JWT token configurations, and monitoring
+
+# Server Configuration
+server:
+  port: 8081
+  servlet:
+    context-path: /auth
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 10
+    connection-timeout: 20000
+    max-connections: 8192
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+# Spring Framework Configuration
+spring:
+  application:
+    name: auth-service
+  profiles:
+    active: dev
+    
+  # Database Configuration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_auth_dev
+    username: devuser
+    password: devpass
+    driver-class-name: org.postgresql.Driver
+    type: com.zaxxer.hikari.HikariDataSource
+    
+    # HikariCP Connection Pool Configuration
+    hikari:
+      pool-name: AuthServiceHikariCP
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      auto-commit: false
+      
+  # JPA/Hibernate Configuration
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        connection:
+          provider_disables_autocommit: true
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+        temp:
+          use_jdbc_metadata_defaults: false
+    open-in-view: false
+    
+  # Redis Configuration for Session Storage
+  redis:
+    host: localhost
+    port: 6379
+    password: 
+    database: 0
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+      shutdown-timeout: 100ms
+      
+  # Session Configuration
+  session:
+    store-type: redis
+    timeout: 1800s
+    redis:
+      flush-mode: on_save
+      namespace: ufs:auth:session
+      
+  # Security Configuration
+  security:
+    oauth2:
+      client:
+        registration:
+          dev-client:
+            client-id: auth-service-dev
+            client-secret: dev-secret-key-that-should-be-changed-in-production
+            scope: read,write
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost:8081/auth/login/oauth2/code/dev-client
+        provider:
+          dev-client:
+            authorization-uri: http://localhost:8081/auth/oauth/authorize
+            token-uri: http://localhost:8081/auth/oauth/token
+            user-info-uri: http://localhost:8081/auth/user
+            
+  # Jackson JSON Configuration
+  jackson:
+    default-property-inclusion: non_null
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+      accept-single-value-as-array: true
+    time-zone: UTC
+    
+  # Development Tools Configuration
+  devtools:
+    restart:
+      enabled: true
+    livereload:
+      enabled: true
+      
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+    lease:
+      duration: 30
+      renewal-interval: 10
+  instance:
+    hostname: localhost
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    metadata-map:
+      zone: dev
+      version: 1.0.0
+      
+# JWT Token Configuration
+jwt:
+  secret: bXktc2VjcmV0LWtleS1mb3ItZGV2ZWxvcG1lbnQtZW52aXJvbm1lbnQtdGhhdC1pcy1sb25nLWVub3VnaA==
+  expiration: 3600000
+  issuer: ufs-auth-service-dev
+  refresh-expiration: 86400000
+  algorithm: HS512
+  
+# Logging Configuration
+logging:
+  level:
+    com.ufs.auth: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web.filter.CommonsRequestLoggingFilter: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.jdbc.core: DEBUG
+    org.springframework.transaction: DEBUG
+    com.zaxxer.hikari: DEBUG
+    root: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/auth-service-dev.log
+    max-size: 100MB
+    max-history: 7
+    
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,configprops,beans,mappings,scheduledtasks,httptrace,auditevents
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  health:
+    redis:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      slo:
+        http.server.requests: 50ms,100ms,200ms,500ms,1s,2s,5s
+    tags:
+      application: auth-service
+      environment: development
+    export:
+      prometheus:
+        enabled: true
+        
+# Application-Specific Configuration
+app:
+  security:
+    cors:
+      allowed-origins: 
+        - http://localhost:3000
+        - http://localhost:3001
+        - http://localhost:8080
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS,PATCH
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
+    password-policy:
+      min-length: 8
+      require-uppercase: true
+      require-lowercase: true
+      require-numbers: true
+      require-special-chars: true
+    session:
+      timeout-minutes: 30
+      max-sessions-per-user: 3
+    rate-limiting:
+      login-attempts: 5
+      lockout-duration-minutes: 15
+      
+  # Development-specific features
+  dev:
+    enable-h2-console: false
+    enable-debug-endpoints: true
+    mock-external-services: true
+    bypass-email-verification: true
+    
+  # Feature flags for development
+  features:
+    mfa-enabled: true
+    password-reset-enabled: true
+    social-login-enabled: true
+    audit-logging-enabled: true
+    
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      userService:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10000
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+  retry:
+    instances:
+      userService:
+        max-attempts: 3
+        wait-duration: 1000
+        
+# Async Configuration
+spring:
+  task:
+    execution:
+      pool:
+        core-size: 8
+        max-size: 16
+        queue-capacity: 100
+        keep-alive: 60s
+      thread-name-prefix: auth-async-
+    scheduling:
+      pool:
+        size: 4
+      thread-name-prefix: auth-scheduled-
+      
+# Cache Configuration
+spring:
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      key-prefix: "auth:cache:"
+      use-key-prefix: true
+      
+# Development Database Schema Configuration
+spring:
+  sql:
+    init:
+      mode: always
+      schema-locations: classpath:schema-dev.sql
+      data-locations: classpath:data-dev.sql
+      continue-on-error: false
+      
+# Trace and Span Configuration for Observability
+spring:
+  sleuth:
+    sampler:
+      probability: 1.0
+    zipkin:
+      base-url: http://localhost:9411
+      enabled: true

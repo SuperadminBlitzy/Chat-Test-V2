@@ -1,0 +1,429 @@
+# ==============================================================================
+# PRODUCTION CONFIGURATION FOR AUTHENTICATION SERVICE
+# ==============================================================================
+# This configuration file contains production-specific settings for the
+# Authentication Service microservice. It overrides default application.yml
+# settings to provide optimized, secure, and scalable configurations for
+# production deployment.
+# ==============================================================================
+
+server:
+  # Server port configuration with environment variable override
+  port: ${AUTH_SERVICE_PORT:8081}
+  
+  # Production server configuration
+  servlet:
+    context-path: /auth
+  
+  # SSL/TLS configuration for production
+  ssl:
+    enabled: ${SSL_ENABLED:true}
+    key-store: ${SSL_KEYSTORE_PATH:/etc/certs/auth-service-keystore.p12}
+    key-store-password: ${SSL_KEYSTORE_PASSWORD}
+    key-store-type: PKCS12
+    key-alias: auth-service
+  
+  # Connection and timeout settings for production
+  tomcat:
+    max-connections: 10000
+    max-threads: 200
+    min-spare-threads: 10
+    connection-timeout: 20000
+    accept-count: 100
+    max-http-form-post-size: 2MB
+    max-swallow-size: 2MB
+
+# ==============================================================================
+# SPRING FRAMEWORK CONFIGURATION
+# ==============================================================================
+spring:
+  # Application identification
+  application:
+    name: auth-service
+  
+  # Profile-specific configuration
+  profiles:
+    active: prod
+  
+  # External configuration server integration
+  config:
+    import: optional:configserver:${CONFIG_SERVER_URL:http://config-server:8888}
+  
+  # ==============================================================================
+  # DATABASE CONFIGURATION
+  # ==============================================================================
+  datasource:
+    # PostgreSQL production database connection
+    url: jdbc:postgresql://${PROD_DB_HOST:prod-db-host}:${PROD_DB_PORT:5432}/${PROD_DB_NAME:authdb}
+    username: ${PROD_DB_USER}
+    password: ${PROD_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP connection pool configuration for production
+    hikari:
+      pool-name: AuthServicePool
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+      auto-commit: false
+      
+  # ==============================================================================
+  # JPA/HIBERNATE CONFIGURATION
+  # ==============================================================================
+  jpa:
+    hibernate:
+      # Production DDL strategy - validate only, no auto-creation
+      ddl-auto: validate
+    
+    # Performance optimization - disable SQL logging in production
+    show-sql: false
+    
+    # Hibernate specific properties
+    properties:
+      hibernate:
+        # PostgreSQL-specific dialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        
+        # Performance optimizations
+        jdbc:
+          batch_size: 25
+          fetch_size: 150
+        
+        # Cache configuration
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.ehcache.EhCacheRegionFactory
+        
+        # SQL formatting disabled for production
+        format_sql: false
+        use_sql_comments: false
+        
+        # Connection pooling
+        connection:
+          provider_disables_autocommit: true
+  
+  # ==============================================================================
+  # SECURITY CONFIGURATION
+  # ==============================================================================
+  security:
+    oauth2:
+      client:
+        registration:
+          ufs-client:
+            client-id: ${OAUTH_CLIENT_ID}
+            client-secret: ${OAUTH_CLIENT_SECRET}
+            scope:
+              - openid
+              - profile
+              - email
+              - read:financial_data
+              - write:financial_data
+            redirect-uri: '{baseUrl}/login/oauth2/code/{registrationId}'
+            authorization-grant-type: authorization_code
+            client-authentication-method: client_secret_post
+            
+        provider:
+          ufs-provider:
+            issuer-uri: ${OAUTH_ISSUER_URI}
+            user-info-uri: ${OAUTH_USER_INFO_URI}
+            user-name-attribute: sub
+            jwk-set-uri: ${OAUTH_JWK_SET_URI}
+
+# ==============================================================================
+# SERVICE DISCOVERY CONFIGURATION
+# ==============================================================================
+eureka:
+  client:
+    # Eureka server configuration
+    serviceUrl:
+      defaultZone: ${DISCOVERY_SERVICE_URL:http://discovery-service:8761/eureka/}
+    
+    # Performance and reliability settings
+    registry-fetch-interval-seconds: 30
+    eureka-server-connect-timeout-seconds: 10
+    eureka-server-read-timeout-seconds: 10
+    eureka-connection-idle-timeout-seconds: 60
+    eureka-server-total-connections: 200
+    eureka-server-total-connections-per-host: 50
+    
+    # Health check configuration
+    healthcheck:
+      enabled: true
+    
+    # Service discovery optimization
+    fetch-registry: true
+    register-with-eureka: true
+    
+  instance:
+    # Network configuration
+    prefer-ip-address: true
+    ip-address: ${EUREKA_INSTANCE_IP:}
+    
+    # Health check configuration
+    health-check-url-path: /auth/actuator/health
+    status-page-url-path: /auth/actuator/info
+    
+    # Lease configuration for production
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    
+    # Instance metadata
+    metadata-map:
+      version: ${APPLICATION_VERSION:1.0.0}
+      environment: production
+      zone: ${DEPLOYMENT_ZONE:us-east-1}
+
+# ==============================================================================
+# JWT CONFIGURATION
+# ==============================================================================
+jwt:
+  # Secret key for JWT signing (should be at least 256 bits)
+  secret: ${JWT_SECRET_KEY}
+  
+  # Token expiration settings
+  expiration:
+    # Access token expiration (1 hour in milliseconds)
+    access-token: 3600000
+    # Refresh token expiration (24 hours in milliseconds)
+    refresh-token: 86400000
+  
+  # JWT issuer identification
+  issuer: ufs-auth-service
+  
+  # Algorithm configuration
+  algorithm: HS256
+  
+  # Token validation settings
+  clock-skew: 300000  # 5 minutes in milliseconds
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+logging:
+  level:
+    # Root logging level
+    root: INFO
+    
+    # Application-specific logging
+    com.ufs.auth: INFO
+    
+    # Security-related logging
+    org.springframework.security: WARN
+    
+    # Database logging
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    
+    # HTTP client logging
+    org.apache.http: WARN
+    
+    # Circuit breaker logging
+    io.github.resilience4j: INFO
+  
+  # Console output pattern
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+  
+  # File logging configuration
+  file:
+    name: /var/log/auth-service.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# ==============================================================================
+# ACTUATOR CONFIGURATION
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose only necessary endpoints for production
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+      
+  endpoint:
+    health:
+      # Show health details only when authorized
+      show-details: when_authorized
+      show-components: when_authorized
+      probes:
+        enabled: true
+    
+    info:
+      enabled: true
+    
+    prometheus:
+      enabled: true
+      
+    metrics:
+      enabled: true
+  
+  # Health check configuration
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    
+    # Database health indicator
+    db:
+      enabled: true
+    
+    # Disk space health indicator
+    diskspace:
+      enabled: true
+      threshold: 10GB
+  
+  # Metrics configuration
+  metrics:
+    enable:
+      all: true
+    export:
+      prometheus:
+        enabled: true
+        step: 60s
+        descriptions: true
+    
+    # Custom metrics tags
+    tags:
+      application: auth-service
+      environment: production
+      version: ${APPLICATION_VERSION:1.0.0}
+  
+  # Application information
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+
+# ==============================================================================
+# RESILIENCE4J CONFIGURATION
+# ==============================================================================
+resilience4j:
+  # Circuit breaker configuration
+  circuitbreaker:
+    instances:
+      database:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 3000
+        permitted-number-of-calls-in-half-open-state: 10
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 30000
+        
+      external-service:
+        failure-rate-threshold: 60
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5000
+        permitted-number-of-calls-in-half-open-state: 5
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 60000
+  
+  # Retry configuration
+  retry:
+    instances:
+      database:
+        max-attempts: 3
+        wait-duration: 1000
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        
+      external-service:
+        max-attempts: 2
+        wait-duration: 2000
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+  
+  # Rate limiter configuration
+  ratelimiter:
+    instances:
+      auth-endpoints:
+        limit-for-period: 100
+        limit-refresh-period: 60s
+        timeout-duration: 1s
+
+# ==============================================================================
+# CUSTOM APPLICATION CONFIGURATION
+# ==============================================================================
+application:
+  # Security configuration
+  security:
+    # Password policy
+    password:
+      min-length: 12
+      require-uppercase: true
+      require-lowercase: true
+      require-digits: true
+      require-special-chars: true
+      max-age-days: 90
+    
+    # Session configuration
+    session:
+      timeout-minutes: 30
+      max-concurrent-sessions: 3
+    
+    # Account lockout policy
+    lockout:
+      max-attempts: 5
+      lockout-duration-minutes: 30
+  
+  # API configuration
+  api:
+    # Rate limiting
+    rate-limit:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 100
+    
+    # CORS configuration
+    cors:
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:https://ufs-app.com}
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: '*'
+      expose-headers: X-Total-Count
+      allow-credentials: true
+      max-age: 3600
+  
+  # Audit configuration
+  audit:
+    enabled: true
+    retention-days: 2555  # 7 years for financial compliance
+    
+    # Events to audit
+    events:
+      - USER_LOGIN
+      - USER_LOGOUT
+      - FAILED_LOGIN
+      - PASSWORD_CHANGE
+      - ACCOUNT_LOCKED
+      - PERMISSION_GRANTED
+      - PERMISSION_REVOKED
+      - DATA_ACCESS
+      - DATA_MODIFICATION
+
+# ==============================================================================
+# ENVIRONMENT VALIDATION
+# ==============================================================================
+# Validation to ensure required environment variables are set
+validation:
+  required-environment-variables:
+    - PROD_DB_USER
+    - PROD_DB_PASSWORD
+    - JWT_SECRET_KEY
+    - OAUTH_CLIENT_ID
+    - OAUTH_CLIENT_SECRET
+    - OAUTH_ISSUER_URI
+    - SSL_KEYSTORE_PASSWORD

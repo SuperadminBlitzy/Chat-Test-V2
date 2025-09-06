@@ -1,0 +1,309 @@
+# ============================================================================
+# Auth Service - Main Configuration
+# ============================================================================
+# This configuration file defines the core settings for the authentication
+# service in the Unified Financial Services Platform. It includes server
+# configuration, database connectivity, JWT token management, service
+# discovery settings, and comprehensive logging configuration.
+#
+# Technology Stack:
+# - Spring Boot 3.2+ with Java 21 LTS
+# - PostgreSQL 16+ for transactional data storage
+# - Spring Security 6.2+ with OAuth2 and JWT support
+# - Eureka service discovery for microservices architecture
+# - Spring Data JPA for data persistence
+# ============================================================================
+
+# ============================================================================
+# Spring Application Configuration
+# ============================================================================
+spring:
+  # Application identification for service discovery and monitoring
+  application:
+    name: auth-service
+  
+  # ============================================================================
+  # Database Configuration - PostgreSQL
+  # ============================================================================
+  # Primary database for storing user credentials, roles, and authentication data
+  # Configured for financial services with ACID compliance requirements
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_auth_db
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+    
+    # Connection pool configuration optimized for financial services
+    # Based on technical specifications for high-performance requirements
+    hikari:
+      # Pool sizing aligned with PostgreSQL connection pool specifications
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      # Health check configuration for connection reliability
+      connection-test-query: SELECT 1
+      pool-name: AuthServiceHikariPool
+      # Connection leak detection for production monitoring
+      leak-detection-threshold: 60000
+  
+  # ============================================================================
+  # JPA/Hibernate Configuration
+  # ============================================================================
+  # Data persistence layer configuration for PostgreSQL integration
+  jpa:
+    # Hibernate DDL management - disabled for production safety
+    hibernate:
+      ddl-auto: none
+    
+    # SQL logging for development and debugging
+    show-sql: true
+    
+    # PostgreSQL-specific properties for optimal performance
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Connection handling and performance optimization
+        connection:
+          provider_disables_autocommit: true
+        # Query optimization for financial data processing
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        # Second-level cache configuration for improved performance
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+        # Statistics and monitoring
+        generate_statistics: false
+  
+  # ============================================================================
+  # Database Initialization Configuration
+  # ============================================================================
+  # SQL initialization for database schema and reference data
+  sql:
+    init:
+      mode: always
+      # Platform-specific SQL execution
+      platform: postgresql
+      # Schema initialization order
+      schema-locations: classpath:schema.sql
+      data-locations: classpath:data.sql
+      # Initialization behavior
+      continue-on-error: false
+
+# ============================================================================
+# Server Configuration
+# ============================================================================
+# HTTP server configuration optimized for microservices architecture
+server:
+  port: 8081
+  # Connection and timeout settings for financial services requirements
+  tomcat:
+    # Thread pool configuration for high concurrency
+    threads:
+      max: 200
+      min-spare: 10
+    # Connection timeout settings
+    connection-timeout: 20000
+    keep-alive-timeout: 60000
+    # Request processing limits
+    max-http-form-post-size: 2097152
+    max-swallow-size: 2097152
+  # Compression settings for network optimization
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+# ============================================================================
+# Service Discovery Configuration - Eureka
+# ============================================================================
+# Microservices architecture support with Eureka service registry
+eureka:
+  client:
+    # Service registry connection
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    # Registry behavior configuration
+    register-with-eureka: true
+    fetch-registry: true
+    # Health check and heartbeat settings
+    registry-fetch-interval-seconds: 30
+    eureka-service-url-poll-interval-seconds: 300
+    # Connection timeout and retry configuration
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-read-timeout-seconds: 8
+  
+  instance:
+    # Instance identification and networking
+    prefer-ip-address: true
+    # Instance metadata for service mesh integration
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      profile: ${spring.profiles.active:default}
+    # Health check configuration
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Lease renewal and expiration for high availability
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+
+# ============================================================================
+# JWT Token Configuration
+# ============================================================================
+# JSON Web Token configuration for secure authentication and authorization
+# Aligned with OAuth2 and JWT standards for financial services
+app:
+  jwt:
+    # Secret key configuration with environment variable support
+    # Production environments should use strong, randomly generated secrets
+    secret: ${JWT_SECRET:defaultSecretKey}
+    
+    # Access token expiration (24 hours in milliseconds)
+    # Balanced between security and user experience for financial applications
+    expiration-ms: 86400000
+    
+    # Refresh token configuration for extended sessions
+    refresh-token:
+      # Refresh token expiration (7 days in milliseconds)
+      # Allows for extended authenticated sessions while maintaining security
+      expiration-ms: 604800000
+    
+    # Additional JWT configuration for enhanced security
+    issuer: ufs-auth-service
+    audience: ufs-platform
+    
+    # Algorithm configuration for token signing
+    algorithm: HS512
+    
+    # Token header configuration
+    header: Authorization
+    prefix: "Bearer "
+
+# ============================================================================
+# Logging Configuration
+# ============================================================================
+# Comprehensive logging setup for monitoring, debugging, and audit trails
+# Essential for financial services compliance and security monitoring
+logging:
+  # Application-specific logging levels
+  level:
+    # Auth service detailed logging for security monitoring
+    com.ufs.auth: INFO
+    
+    # Spring Security debug logging for authentication troubleshooting
+    org.springframework.security: DEBUG
+    
+    # Database connection and query logging
+    org.springframework.jdbc: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    
+    # HTTP request/response logging for API monitoring
+    org.springframework.web: INFO
+    
+    # Service discovery logging
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    
+    # Root logger level
+    root: INFO
+  
+  # Log file configuration for audit and monitoring
+  file:
+    name: logs/auth-service.log
+    max-size: 100MB
+    max-history: 30
+  
+  # Log pattern configuration for structured logging
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] [%X{traceId:-},%X{spanId:-}] - %msg%n"
+
+# ============================================================================
+# Management and Monitoring Configuration
+# ============================================================================
+# Spring Boot Actuator configuration for operational monitoring
+# Essential for microservices health checks and metrics collection
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose essential endpoints for monitoring and health checks
+        include: health,info,metrics,prometheus,env
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      # Detailed health information for service mesh integration
+      show-details: always
+      # Health check components
+      show-components: always
+  
+  # Metrics configuration for Prometheus integration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    tags:
+      service: auth-service
+      version: ${spring.application.version:1.0.0}
+
+# ============================================================================
+# Security Configuration
+# ============================================================================
+# Additional security settings for financial services compliance
+security:
+  # Enable security debug logging
+  debug: false
+  
+  # CORS configuration for cross-origin requests
+  cors:
+    allowed-origins: "http://localhost:3000,http://localhost:8080"
+    allowed-methods: "GET,POST,PUT,DELETE,OPTIONS"
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+
+# ============================================================================
+# Custom Application Properties
+# ============================================================================
+# Application-specific configuration for authentication service
+auth-service:
+  # Password policy configuration for enhanced security
+  password-policy:
+    min-length: 8
+    require-uppercase: true
+    require-lowercase: true
+    require-numbers: true
+    require-special-chars: true
+    max-failed-attempts: 5
+    lockout-duration-minutes: 30
+  
+  # Session management configuration
+  session:
+    timeout-minutes: 30
+    max-concurrent-sessions: 3
+    prevent-session-fixation: true
+  
+  # Rate limiting configuration for API protection
+  rate-limiting:
+    enabled: true
+    requests-per-minute: 100
+    requests-per-hour: 1000
+  
+  # Audit configuration for compliance requirements
+  audit:
+    enabled: true
+    log-authentication-attempts: true
+    log-authorization-decisions: true
+    retention-days: 90
+
+# ============================================================================
+# Environment-Specific Overrides
+# ============================================================================
+# This configuration serves as the base profile
+# Environment-specific configurations (dev, staging, prod) will override
+# these settings through application-{profile}.yml files

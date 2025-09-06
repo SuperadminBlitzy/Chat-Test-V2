@@ -1,0 +1,376 @@
+# =============================================================================
+# AUTH-SERVICE TEST CONFIGURATION
+# =============================================================================
+# This configuration file overrides default application.yml properties to 
+# provide a test-friendly environment for the auth-service microservice.
+# 
+# Key Features:
+# - H2 in-memory database for isolated testing
+# - Disabled Eureka service discovery
+# - Enhanced debug logging for development
+# - Test-specific JWT configuration
+# - OAuth2 resource server setup for integration testing
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SPRING FRAMEWORK CONFIGURATION
+# -----------------------------------------------------------------------------
+spring:
+  # Application Identity
+  application:
+    name: auth-service
+  
+  # Database Configuration - H2 In-Memory Database
+  # Using H2 for fast, isolated test execution without external dependencies
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: password
+    # Connection pool settings optimized for testing
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 20000
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+  
+  # H2 Console Configuration (enabled for test debugging)
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        web-allow-others: true
+        trace: false
+  
+  # JPA/Hibernate Configuration
+  # Optimized for H2 database with PostgreSQL compatibility mode
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: create-drop  # Recreate schema for each test run
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 25
+          fetch_size: 50
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+        generate_statistics: true
+        temp:
+          use_jdbc_metadata_defaults: false
+  
+  # Flyway Migration (disabled for test environment)
+  flyway:
+    enabled: false
+  
+  # Liquibase Migration (disabled for test environment)
+  liquibase:
+    enabled: false
+  
+  # Redis Configuration (disabled for testing)
+  redis:
+    enabled: false
+  
+  # Cache Configuration (disabled for testing)
+  cache:
+    type: none
+  
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Test Keycloak instance for integration testing
+          jwk-set-uri: http://localhost:8081/auth/realms/ufs/protocol/openid-connect/certs
+          # Alternative issuer configuration for comprehensive testing
+          issuer-uri: http://localhost:8081/auth/realms/ufs
+    # Basic authentication disabled in favor of JWT
+    basic:
+      enabled: false
+    # Session management for stateless authentication
+    sessions: stateless
+  
+  # Jackson JSON Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: NON_NULL
+    time-zone: UTC
+  
+  # Test Profile Activation
+  profiles:
+    active: test
+  
+  # Main Class Configuration
+  main:
+    allow-bean-definition-overriding: true
+    lazy-initialization: false
+
+# -----------------------------------------------------------------------------
+# SERVICE DISCOVERY CONFIGURATION
+# -----------------------------------------------------------------------------
+# Eureka client disabled for test environment to avoid external dependencies
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+  instance:
+    prefer-ip-address: false
+
+# -----------------------------------------------------------------------------
+# LOGGING CONFIGURATION
+# -----------------------------------------------------------------------------
+# Enhanced logging for debugging and test analysis
+logging:
+  level:
+    # Root logging level
+    root: INFO
+    # Auth service specific logging
+    com.ufs.auth: DEBUG
+    # Spring Security debugging
+    org.springframework.security: DEBUG
+    # OAuth2 specific logging
+    org.springframework.security.oauth2: DEBUG
+    # JWT processing logging
+    org.springframework.security.oauth2.jwt: DEBUG
+    # Hibernate SQL logging
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    # Spring framework debugging
+    org.springframework.web: DEBUG
+    org.springframework.boot.autoconfigure: INFO
+    # H2 database logging
+    org.h2: INFO
+    # HTTP client logging for external service calls
+    org.springframework.web.client: DEBUG
+    # Actuator endpoint logging
+    org.springframework.boot.actuate: INFO
+  
+  # Console logging pattern for test readability
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{50}] - %msg%n"
+  
+  # Log file configuration for test result analysis
+  file:
+    name: logs/auth-service-test.log
+    max-size: 10MB
+    max-history: 5
+
+# -----------------------------------------------------------------------------
+# JWT CONFIGURATION
+# -----------------------------------------------------------------------------
+# Test-specific JWT configuration with longer expiration for integration tests
+jwt:
+  # Test secret key (256-bit minimum for HS256 algorithm)
+  secret: test-secret-key-for-auth-service-with-at-least-256-bits-long-security-testing-environment
+  # Extended expiration for comprehensive test scenarios (1 hour)
+  expiration: 3600000
+  # Token issuer for test environment
+  issuer: ufs-auth-service-test
+  # Test audience
+  audience: ufs-platform-test
+  # Algorithm specification
+  algorithm: HS256
+  # Claims configuration
+  claims:
+    user-id: userId
+    username: username
+    authorities: authorities
+    tenant-id: tenantId
+  # Refresh token configuration
+  refresh:
+    expiration: 86400000  # 24 hours for test scenarios
+
+# -----------------------------------------------------------------------------
+# ACTUATOR CONFIGURATION (Test Environment)
+# -----------------------------------------------------------------------------
+# Management endpoints for test monitoring and health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,env,configprops,beans,flyway,liquibase
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    info:
+      enabled: true
+  health:
+    db:
+      enabled: true
+    redis:
+      enabled: false
+  info:
+    git:
+      mode: full
+    build:
+      enabled: true
+    env:
+      enabled: true
+
+# -----------------------------------------------------------------------------
+# TESTING FRAMEWORK CONFIGURATION
+# -----------------------------------------------------------------------------
+# Test-specific configurations for various testing scenarios
+
+# Test Data Configuration
+test:
+  data:
+    # Predefined test users for integration testing
+    users:
+      admin:
+        username: test-admin
+        password: test-admin-password
+        roles: ADMIN,USER
+      user:
+        username: test-user
+        password: test-user-password
+        roles: USER
+    # Test organization data
+    organization:
+      name: Universal Financial Services Test
+      code: UFS-TEST
+      tenant-id: test-tenant-001
+  
+  # Mock external service responses
+  mock:
+    enabled: true
+    keycloak:
+      enabled: true
+      base-url: http://localhost:8081
+    external-apis:
+      enabled: true
+      delay: 100  # milliseconds
+
+# -----------------------------------------------------------------------------
+# SECURITY TEST CONFIGURATION
+# -----------------------------------------------------------------------------
+# Additional security settings for comprehensive testing
+security:
+  # CORS configuration for test environment
+  cors:
+    allowed-origins: 
+      - http://localhost:3000
+      - http://localhost:8080
+      - http://localhost:8081
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+  
+  # Rate limiting disabled for testing
+  rate-limiting:
+    enabled: false
+  
+  # Test-specific security headers
+  headers:
+    frame-options: SAMEORIGIN
+    content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline'"
+
+# -----------------------------------------------------------------------------
+# INTEGRATION TEST CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configuration for external service integration testing
+integration:
+  # Test containers configuration
+  testcontainers:
+    reuse:
+      enable: true
+  
+  # WireMock configuration for API mocking
+  wiremock:
+    port: 8089
+    reset-requests-after-each-test: true
+  
+  # Test database configuration
+  database:
+    initialization-mode: always
+    continue-on-error: false
+    separator: ";"
+
+# -----------------------------------------------------------------------------
+# PERFORMANCE TEST CONFIGURATION
+# -----------------------------------------------------------------------------
+# Settings for performance and load testing scenarios
+performance:
+  test:
+    # Thread pool configuration for concurrent testing
+    thread-pool:
+      core-size: 10
+      max-size: 50
+      queue-capacity: 100
+    # Connection timeout settings
+    timeouts:
+      connection: 5000
+      read: 30000
+      write: 30000
+    # Cache settings for performance testing
+    cache:
+      enabled: false
+      ttl: 300
+
+# -----------------------------------------------------------------------------
+# DOCUMENTATION AND API TESTING
+# -----------------------------------------------------------------------------
+# OpenAPI/Swagger configuration for API documentation testing
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  show-actuator: true
+  group-configs:
+    - group: auth-service
+      display-name: Authentication Service API
+      paths-to-match: /api/auth/**
+
+# -----------------------------------------------------------------------------
+# ASYNC PROCESSING CONFIGURATION
+# -----------------------------------------------------------------------------
+# Asynchronous processing settings for test scenarios
+async:
+  # Thread pool executor configuration
+  executor:
+    core-pool-size: 2
+    max-pool-size: 10
+    queue-capacity: 50
+    thread-name-prefix: auth-test-async-
+    keep-alive-seconds: 60
+  
+  # Event processing configuration
+  events:
+    enabled: true
+    async: false  # Synchronous for test predictability
+
+# -----------------------------------------------------------------------------
+# VALIDATION CONFIGURATION
+# -----------------------------------------------------------------------------
+# Bean validation settings for comprehensive input testing
+validation:
+  # Hibernate validator configuration
+  fail-fast: false
+  # Custom validation groups for different test scenarios
+  groups:
+    basic: com.ufs.auth.validation.groups.BasicValidation
+    advanced: com.ufs.auth.validation.groups.AdvancedValidation
