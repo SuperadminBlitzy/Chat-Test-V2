@@ -1,0 +1,410 @@
+# =======================================================================
+# Financial Wellness Service - Test Configuration
+# Test-specific configuration for unit and integration testing
+# Overrides production settings to create isolated testing environment
+# =======================================================================
+
+# Test server configuration - random port assignment
+server:
+  port: 0  # Random available port for parallel test execution
+  # Simplified configuration for testing
+  tomcat:
+    threads:
+      max: 10
+      min-spare: 2
+    connection-timeout: 5s
+    max-connections: 100
+  # Disable compression and security headers for testing
+  compression:
+    enabled: false
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: always
+
+spring:
+  application:
+    name: financial-wellness-service
+  
+  # Test MongoDB Configuration - embedded/local test database
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/testdb
+      # Enable auto-index creation for test convenience
+      auto-index-creation: true
+      # Simplified connection pool for testing
+      options:
+        maxPoolSize: 10
+        minPoolSize: 1
+        maxIdleTimeMS: 60000
+        waitQueueTimeoutMS: 5000
+        serverSelectionTimeoutMS: 5000
+        connectTimeoutMS: 5000
+        socketTimeoutMS: 10000
+        readPreference: primary
+        writeConcern:
+          w: 1
+          wtimeout: 1000
+          journal: false  # Disable journaling for faster tests
+  
+  # Disable external configuration management for tests
+  cloud:
+    config:
+      enabled: false
+    discovery:
+      enabled: false
+  
+  # Test security configuration - disable JWT validation for unit tests
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwt-set-uri: ""  # Empty to disable JWT validation in tests
+      client:
+        registration:
+          financial-wellness:
+            client-id: test-client
+            client-secret: test-secret
+            scope: financial:read,financial:write,wellness:manage
+  
+  # In-memory H2 database for JPA testing (if needed alongside MongoDB)
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password: ""
+  
+  # JPA configuration for testing
+  jpa:
+    open-in-view: false
+    show-sql: true  # Enable SQL logging for test debugging
+    hibernate:
+      ddl-auto: create-drop  # Recreate schema for each test
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        format_sql: true
+        jdbc:
+          batch_size: 10
+        cache:
+          use_second_level_cache: false
+          use_query_cache: false
+  
+  # Test caching configuration - simple in-memory cache
+  cache:
+    type: simple
+    cache-names: 
+      - financial-data
+      - risk-assessments
+      - recommendations
+  
+  # Disable Redis for testing - use simple cache
+  redis:
+    host: localhost
+    port: 6379
+    timeout: 1000ms
+    lettuce:
+      pool:
+        max-active: 5
+        max-idle: 2
+        min-idle: 1
+  
+  # Jackson configuration for test data serialization
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+      indent-output: true  # Pretty print for test readability
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+  
+  # Reduced task execution pools for testing
+  task:
+    execution:
+      pool:
+        core-size: 2
+        max-size: 5
+        queue-capacity: 10
+        keep-alive: 10s
+    scheduling:
+      pool:
+        size: 2
+
+# Disable Eureka service discovery for tests
+eureka:
+  client:
+    enabled: false
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    fetch-registry: false
+    register-with-eureka: false
+  instance:
+    prefer-ip-address: false
+
+# Test management and monitoring configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose all endpoints for test verification
+        include: "*"
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      # Simplified health checks for testing
+      group:
+        readiness:
+          include: "readinessState"
+        liveness:
+          include: "livenessState,diskSpace"
+    metrics:
+      enabled: true
+    info:
+      enabled: true
+  
+  # Test metrics configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: false  # Disable Prometheus for tests
+    distribution:
+      percentiles-histogram:
+        http.server.requests: false
+    tags:
+      application: ${spring.application.name}
+      environment: test
+  
+  # Simplified health indicators for testing
+  health:
+    mongo:
+      enabled: true
+    redis:
+      enabled: false  # Disable Redis health check for tests
+    diskspace:
+      enabled: true
+      threshold: 10MB
+  
+  # Application info for test identification
+  info:
+    app:
+      name: ${spring.application.name}
+      description: "Financial Wellness Service - Test Configuration"
+      version: "TEST"
+      environment: test
+
+# Enhanced logging configuration for test debugging
+logging:
+  level:
+    # Debug level for application code to aid in test debugging
+    com.ufs.wellness: DEBUG
+    # Standard logging levels for framework components
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.cloud: WARN
+    org.springframework.data.mongodb: DEBUG
+    org.springframework.kafka: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: DEBUG
+    # Test-specific logging
+    org.springframework.test: DEBUG
+    org.testcontainers: INFO
+    # Root logger
+    root: INFO
+  
+  # Console logging pattern optimized for test output
+  pattern:
+    console: "%clr(%d{HH:mm:ss.SSS}){faint} %clr(%5p) %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+  
+  # Disable file logging for tests
+  file:
+    name: ""
+
+# Test-specific financial wellness configuration
+financial-wellness:
+  # Mock AI/ML services for testing
+  ai:
+    model:
+      risk-assessment:
+        endpoint: http://localhost:8090/predict
+        timeout: 1s
+        max-retries: 1
+      recommendation-engine:
+        endpoint: http://localhost:8091/recommendations
+        timeout: 2s
+        batch-size: 10
+  
+  # Test business rules configuration
+  business:
+    risk:
+      low-risk-threshold: 300
+      medium-risk-threshold: 600
+      high-risk-threshold: 800
+    recommendations:
+      max-recommendations: 5
+      refresh-interval: 1m
+      personalization-weight: 0.7
+  
+  # Mock external service integration for testing
+  external:
+    credit-bureau:
+      url: http://localhost:8092
+      api-key: test-key
+      timeout: 2s
+    market-data:
+      url: http://localhost:8093
+      timeout: 1s
+      refresh-rate: 10s
+  
+  # Feature flags for testing - enable all features
+  features:
+    advanced-analytics: true
+    real-time-scoring: true
+    predictive-insights: true
+    social-recommendations: true
+
+# Test circuit breaker configuration - lenient settings
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiRiskService:
+        register-health-indicator: false
+        sliding-window-size: 10
+        minimum-number-of-calls: 3
+        permitted-number-of-calls-in-half-open-state: 2
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 80
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 2s
+      creditBureauService:
+        register-health-indicator: false
+        sliding-window-size: 5
+        minimum-number-of-calls: 2
+        wait-duration-in-open-state: 5s
+        failure-rate-threshold: 80
+  
+  # Test retry configuration - minimal retries
+  retry:
+    instances:
+      aiRiskService:
+        max-attempts: 2
+        wait-duration: 100ms
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+  
+  # Test rate limiter - generous limits
+  ratelimiter:
+    instances:
+      financialDataAccess:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 1s
+
+# Test Kafka configuration - local embedded Kafka or testcontainers
+spring.kafka:
+  bootstrap-servers: localhost:9092
+  producer:
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    acks: 1  # Reduced acknowledgment for faster tests
+    retries: 1
+    batch-size: 1024
+    linger-ms: 0  # No batching delay for tests
+    buffer-memory: 1048576
+    enable-idempotence: false  # Simplified for testing
+  consumer:
+    group-id: test-group
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    auto-offset-reset: earliest
+    enable-auto-commit: true  # Simplified for testing
+    properties:
+      spring.json.trusted.packages: "com.ufs.wellness.events"
+  listener:
+    ack-mode: batch
+    concurrency: 1
+    poll-timeout: 1000
+  # Embedded Kafka configuration for tests
+  embedded:
+    topics:
+      - financial-events
+      - risk-assessments
+      - customer-interactions
+    partitions: 1
+    replication-factor: 1
+
+# Test application properties
+app:
+  security:
+    jwt:
+      expiration: 300  # 5 minutes for tests
+      refresh-expiration: 600  # 10 minutes for tests
+      secret: test-jwt-secret-key-for-testing-purposes-only
+    rate-limit:
+      requests-per-minute: 1000
+      requests-per-hour: 10000
+  
+  # Minimal data retention for tests
+  data:
+    retention:
+      customer-data: 1  # 1 day for tests
+      transaction-data: 1
+      audit-logs: 1
+    encryption:
+      algorithm: AES-256-GCM
+      key-rotation-days: 1
+  
+  # Relaxed monitoring thresholds for tests
+  monitoring:
+    performance:
+      max-response-time: 5000ms
+      max-database-query-time: 2000ms
+      max-external-api-time: 10000ms
+    business:
+      min-recommendation-accuracy: 0.70
+      max-risk-assessment-time: 5000ms
+      min-customer-satisfaction: 3.0
+
+# Test profile activation
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+
+# Integration test profile with TestContainers
+---
+spring:
+  config:
+    activate:
+      on-profile: integration-test
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/integration-testdb
+kafka:
+  bootstrap-servers: localhost:9093  # Different port for integration tests
+
+# Unit test profile with maximum mocking
+---
+spring:
+  config:
+    activate:
+      on-profile: unit-test
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/unit-testdb
+eureka:
+  client:
+    enabled: false
+kafka:
+  bootstrap-servers: localhost:9094  # Different port for unit tests
+financial-wellness:
+  external:
+    credit-bureau:
+      url: http://localhost:0  # Will be mocked
+    market-data:
+      url: http://localhost:0  # Will be mocked

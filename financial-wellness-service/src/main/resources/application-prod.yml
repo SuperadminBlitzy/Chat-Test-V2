@@ -1,0 +1,452 @@
+# Production Environment Configuration for Financial Wellness Service
+# This configuration file provides production-optimized settings for the Financial Wellness Service
+# including enhanced security, monitoring, database connections, and performance tuning
+
+server:
+  port: 8085
+  servlet:
+    context-path: /
+  tomcat:
+    # Production-optimized connection pool settings
+    max-connections: 8192
+    accept-count: 200
+    max-threads: 400
+    min-spare-threads: 50
+    connection-timeout: 20000
+    # Security headers for production
+    redirect-context-root: false
+  error:
+    # Hide error details in production
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+spring:
+  application:
+    name: financial-wellness-service
+  
+  # Config Server Integration for centralized configuration management
+  config:
+    import: configserver:http://config-server:8888
+  
+  # Production MongoDB Configuration with connection pooling
+  data:
+    mongodb:
+      uri: mongodb://prod-mongodb:27017/financial-wellness-db
+      # Connection pool configuration for production workloads
+      options:
+        max-pool-size: 100
+        min-pool-size: 10
+        max-idle-time-ms: 300000
+        wait-queue-timeout-ms: 10000
+        server-selection-timeout-ms: 30000
+        connect-timeout-ms: 10000
+        socket-timeout-ms: 30000
+        ssl-enabled: true
+        ssl-invalid-hostname-allowed: false
+        read-preference: primary
+        write-concern: majority
+        retry-writes: true
+        retry-reads: true
+  
+  # Production Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+          # Production JWT validation settings
+          cache-duration: PT5M
+          clockskew: PT30S
+  
+  # Cache Configuration for production performance
+  cache:
+    type: redis
+    redis:
+      host: redis-cluster
+      port: 6379
+      password: ${REDIS_PASSWORD:}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          max-wait: 2000ms
+  
+  # Production JPA/Database settings
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50
+          fetch_size: 50
+        connection:
+          provider_disables_autocommit: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+  
+  # Production Datasource Configuration
+  datasource:
+    url: jdbc:postgresql://prod-postgres:5432/financial_wellness
+    username: ${DB_USERNAME:financial_user}
+    password: ${DB_PASSWORD:}
+    hikari:
+      # Production connection pool settings
+      minimum-idle: 10
+      maximum-pool-size: 50
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+      pool-name: FinancialWellnessCP
+      connection-test-query: SELECT 1
+      auto-commit: false
+  
+  # Production Kafka Configuration for event streaming
+  kafka:
+    bootstrap-servers: kafka-cluster:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      compression-type: snappy
+    consumer:
+      group-id: financial-wellness-service
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+      fetch-min-size: 1024
+      fetch-max-wait: 500ms
+
+# Eureka Service Discovery Configuration for production
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    # Production service discovery settings
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+    initial-instance-info-replication-interval-seconds: 10
+    instance-info-replication-interval-seconds: 30
+    registry-fetch-interval-seconds: 30
+  instance:
+    prefer-ip-address: true
+    # Production instance configuration
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      environment: production
+      zone: production-zone-1
+
+# Production Logging Configuration
+logging:
+  level:
+    # Application-specific logging levels for production
+    com.ufs.wellness: INFO
+    # Spring Framework logging - minimal for production
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    # Database logging - errors only in production
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    # MongoDB logging
+    org.springframework.data.mongodb: INFO
+    # Cache logging
+    org.springframework.cache: INFO
+    # Circuit breaker logging
+    io.github.resilience4j: INFO
+    # Kafka logging
+    org.apache.kafka: WARN
+    # Root logger for production
+    root: WARN
+  
+  # Production log configuration
+  config: classpath:logback-spring.xml
+  
+  # Structured logging for production monitoring
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{50}] - %msg%n"
+  
+  # Production log file configuration
+  file:
+    name: /var/log/financial-wellness-service/application.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# Spring Boot Actuator Management Endpoints for production monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        # Production endpoints - security-focused selection
+        include: health,info,prometheus,metrics
+        exclude: env,configprops,beans,mappings
+      base-path: /actuator
+      path-mapping:
+        prometheus: metrics
+  
+  endpoint:
+    health:
+      # Detailed health information for production monitoring
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN,ACTUATOR
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState,diskSpace,ping
+        readiness:
+          include: readinessState,db,mongo,redis,kafka
+    
+    info:
+      enabled: true
+    
+    metrics:
+      enabled: true
+    
+    prometheus:
+      enabled: true
+  
+  # Production health indicators
+  health:
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    db:
+      enabled: true
+    mongo:
+      enabled: true
+    redis:
+      enabled: true
+    kafka:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 10GB
+  
+  # Production metrics configuration
+  metrics:
+    enable:
+      all: true
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+      slo:
+        http.server.requests: 100ms,200ms,500ms,1s,2s
+    tags:
+      application: ${spring.application.name}
+      environment: production
+      version: ${spring.application.version:1.0.0}
+  
+  # Production monitoring configuration
+  info:
+    env:
+      enabled: true
+    build:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# Application-specific configuration for Financial Wellness Service
+financial-wellness:
+  # Risk assessment configuration
+  risk-assessment:
+    # Production risk scoring parameters
+    credit-weight: 0.4
+    income-weight: 0.3
+    debt-weight: 0.2
+    history-weight: 0.1
+    cache-ttl: PT1H
+    batch-processing:
+      enabled: true
+      batch-size: 1000
+      thread-pool-size: 10
+  
+  # Recommendation engine configuration
+  recommendation:
+    # AI/ML model endpoints for production
+    model-endpoint: http://ml-service:8080/api/v1/recommendations
+    timeout: 5s
+    retry-attempts: 3
+    fallback-enabled: true
+    cache-ttl: PT30M
+  
+  # External API integrations
+  external-apis:
+    # Credit bureau integration
+    credit-bureau:
+      base-url: https://api.creditbureau.com
+      timeout: 10s
+      retry-attempts: 3
+      circuit-breaker:
+        enabled: true
+        failure-threshold: 5
+        timeout: 30s
+    
+    # Market data integration
+    market-data:
+      base-url: https://api.marketdata.com
+      timeout: 5s
+      retry-attempts: 2
+      rate-limit: 1000
+  
+  # Feature flags for production
+  features:
+    enhanced-analytics: true
+    real-time-scoring: true
+    advanced-recommendations: true
+    audit-logging: true
+    performance-monitoring: true
+  
+  # Security configuration
+  security:
+    # CORS configuration for production
+    cors:
+      allowed-origins: 
+        - https://app.unifiedfinancial.com
+        - https://admin.unifiedfinancial.com
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
+    
+    # Rate limiting for production
+    rate-limiting:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 100
+    
+    # Audit configuration
+    audit:
+      enabled: true
+      include-request-body: false
+      include-response-body: false
+      log-level: INFO
+
+# Circuit Breaker Configuration using Resilience4j
+resilience4j:
+  circuitbreaker:
+    instances:
+      default:
+        failure-rate-threshold: 50
+        slow-call-rate-threshold: 50
+        slow-call-duration-threshold: 2s
+        permitted-number-of-calls-in-half-open-state: 3
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        wait-duration-in-open-state: 30s
+      
+      credit-bureau:
+        failure-rate-threshold: 60
+        slow-call-rate-threshold: 60
+        slow-call-duration-threshold: 5s
+        wait-duration-in-open-state: 60s
+  
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.util.concurrent.TimeoutException
+  
+  timelimiter:
+    instances:
+      default:
+        timeout-duration: 10s
+      
+      credit-bureau:
+        timeout-duration: 15s
+
+# Production thread pool configuration
+spring.task:
+  execution:
+    pool:
+      core-size: 20
+      max-size: 100
+      queue-capacity: 500
+      keep-alive: 60s
+    thread-name-prefix: FinWellness-
+  
+  scheduling:
+    pool:
+      size: 10
+    thread-name-prefix: FinWellness-Scheduler-
+
+# Jackson JSON configuration for production
+spring.jackson:
+  default-property-inclusion: NON_NULL
+  serialization:
+    write-dates-as-timestamps: false
+    fail-on-empty-beans: false
+  deserialization:
+    fail-on-unknown-properties: false
+    accept-single-value-as-array: true
+
+# Production profile validation
+spring.profiles.active: prod
+
+# Environment-specific variables (to be overridden by environment/secrets)
+app:
+  security:
+    jwt:
+      secret: ${JWT_SECRET:}
+    encryption:
+      key: ${ENCRYPTION_KEY:}
+  
+  database:
+    username: ${DB_USERNAME:}
+    password: ${DB_PASSWORD:}
+  
+  redis:
+    password: ${REDIS_PASSWORD:}
+  
+  external-apis:
+    credit-bureau:
+      api-key: ${CREDIT_BUREAU_API_KEY:}
+    market-data:
+      api-key: ${MARKET_DATA_API_KEY:}
+
+# Kubernetes health checks configuration
+management.health.probes.enabled: true
+management.endpoint.health.probes.enabled: true

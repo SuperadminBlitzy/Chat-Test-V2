@@ -1,0 +1,487 @@
+# =======================================================================
+# Financial Wellness Service - Spring Boot Configuration
+# Production-ready configuration for enterprise microservices deployment
+# =======================================================================
+
+server:
+  port: 8086
+  # Performance optimization for financial services
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    connection-timeout: 30s
+    max-connections: 8192
+    accept-count: 100
+  # Security headers for financial applications
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+
+spring:
+  application:
+    name: financial-wellness-service
+  
+  # MongoDB Configuration with Enterprise Connection Pooling
+  data:
+    mongodb:
+      uri: mongodb://mongodb:27017/financial-wellness-db
+      # Connection pool configuration for high-performance financial services
+      auto-index-creation: false
+      # Connection pool settings aligned with enterprise requirements
+      options:
+        maxPoolSize: 100
+        minPoolSize: 10
+        maxIdleTimeMS: 300000
+        waitQueueTimeoutMS: 10000
+        serverSelectionTimeoutMS: 30000
+        connectTimeoutMS: 10000
+        socketTimeoutMS: 30000
+        # Read preferences for financial data consistency
+        readPreference: primaryPreferred
+        writeConcern:
+          w: majority
+          wtimeout: 5000
+          journal: true
+  
+  # Centralized Configuration Management
+  cloud:
+    config:
+      uri: http://config-server:8888
+      # Fail-fast for critical configuration dependencies
+      fail-fast: true
+      retry:
+        initial-interval: 1000
+        max-attempts: 6
+        max-interval: 2000
+        multiplier: 1.1
+      # Configuration refresh for runtime updates
+      refresh:
+        enabled: true
+    # Service discovery configuration
+    discovery:
+      enabled: true
+  
+  # Security Configuration for Financial Services
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000
+          # JWT token validation settings
+          cache-time-to-live: 300s
+          clock-skew: 60s
+      client:
+        registration:
+          financial-wellness:
+            client-id: ${OAUTH2_CLIENT_ID:financial-wellness-client}
+            client-secret: ${OAUTH2_CLIENT_SECRET:your-client-secret}
+            scope: financial:read,financial:write,wellness:manage
+  
+  # Database optimization for financial data
+  jpa:
+    open-in-view: false
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 20
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+  
+  # Caching configuration for performance optimization
+  cache:
+    type: redis
+    redis:
+      time-to-live: 300s
+      cache-null-values: false
+      key-prefix: "financial-wellness:"
+  
+  # Redis configuration for session management and caching
+  redis:
+    host: redis
+    port: 6379
+    password: ${REDIS_PASSWORD:}
+    timeout: 3000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: -1ms
+      shutdown-timeout: 100ms
+  
+  # Jackson configuration for financial data serialization
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+    time-zone: UTC
+  
+  # Task execution configuration for async processing
+  task:
+    execution:
+      pool:
+        core-size: 8
+        max-size: 20
+        queue-capacity: 100
+        keep-alive: 60s
+    scheduling:
+      pool:
+        size: 5
+
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://discovery-service:8761/eureka/
+    # Enhanced discovery settings for financial services
+    fetch-registry: true
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 30
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-connect-timeout-seconds: 10
+    eureka-server-read-timeout-seconds: 10
+  instance:
+    # Instance configuration for high availability
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    # Health check URL for service discovery
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Metadata for service identification
+    metadata-map:
+      environment: ${ENVIRONMENT:production}
+      version: ${APPLICATION_VERSION:1.0.0}
+      team: financial-wellness
+      criticality: high
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        # Comprehensive endpoint exposure for monitoring and operations
+        include: "health,info,prometheus,metrics,env,configprops,loggers,threaddump,heapdump"
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      # Detailed health checks for financial services
+      show-details: always
+      show-components: always
+      # Custom health indicators
+      group:
+        readiness:
+          include: "readinessState,mongo,redis"
+        liveness:
+          include: "livenessState,diskSpace"
+    # Metrics configuration
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    # Info endpoint configuration
+    info:
+      enabled: true
+      env:
+        enabled: true
+      git:
+        mode: full
+      build:
+        enabled: true
+  
+  # Metrics configuration for financial services monitoring
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+    distribution:
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        financial.transaction.processing: 0.5, 0.95, 0.99
+      percentiles-histogram:
+        http.server.requests: true
+        financial.transaction.processing: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:production}
+      region: ${AWS_REGION:us-east-1}
+  
+  # Health indicators configuration
+  health:
+    mongo:
+      enabled: true
+    redis:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 100MB
+    # Custom health check intervals
+    refresh:
+      rate: 30s
+    circuit-breakers:
+      enabled: true
+  
+  # Security for management endpoints
+  security:
+    enabled: true
+  
+  # Application information
+  info:
+    app:
+      name: ${spring.application.name}
+      description: "Financial Wellness Service providing personalized financial recommendations and analytics"
+      version: ${APPLICATION_VERSION:1.0.0}
+      encoding: "@project.build.sourceEncoding@"
+      java:
+        version: "@java.version@"
+
+# Logging Configuration for Financial Services
+logging:
+  level:
+    # Application-specific logging levels
+    com.ufs.wellness: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.cloud: INFO
+    org.springframework.data.mongodb: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    # Security and audit logging
+    org.springframework.security.web.authentication: INFO
+    org.springframework.security.oauth2: INFO
+    # Performance monitoring
+    org.springframework.web.servlet.DispatcherServlet: DEBUG
+  # Structured logging configuration
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%t] %-40.40logger{39} : %m%n"
+  file:
+    name: logs/financial-wellness-service.log
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB
+
+# Application-specific Configuration
+financial-wellness:
+  # AI/ML model configuration
+  ai:
+    model:
+      risk-assessment:
+        endpoint: http://ai-risk-service:8090/predict
+        timeout: 5s
+        max-retries: 3
+      recommendation-engine:
+        endpoint: http://ai-recommendation-service:8091/recommendations
+        timeout: 10s
+        batch-size: 100
+  
+  # Business rules configuration
+  business:
+    risk:
+      # Risk assessment thresholds
+      low-risk-threshold: 300
+      medium-risk-threshold: 600
+      high-risk-threshold: 800
+    recommendations:
+      # Recommendation engine settings
+      max-recommendations: 10
+      refresh-interval: 24h
+      personalization-weight: 0.7
+  
+  # External service integration
+  external:
+    credit-bureau:
+      url: http://credit-bureau-service:8092
+      api-key: ${CREDIT_BUREAU_API_KEY:}
+      timeout: 15s
+    market-data:
+      url: http://market-data-service:8093
+      timeout: 5s
+      refresh-rate: 30s
+  
+  # Feature flags for controlled rollouts
+  features:
+    advanced-analytics: true
+    real-time-scoring: true
+    predictive-insights: true
+    social-recommendations: false
+
+# Circuit Breaker Configuration (Resilience4j)
+resilience4j:
+  circuitbreaker:
+    instances:
+      aiRiskService:
+        register-health-indicator: true
+        sliding-window-size: 100
+        minimum-number-of-calls: 20
+        permitted-number-of-calls-in-half-open-state: 10
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 60
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 5s
+      creditBureauService:
+        register-health-indicator: true
+        sliding-window-size: 50
+        minimum-number-of-calls: 10
+        wait-duration-in-open-state: 60s
+        failure-rate-threshold: 50
+  
+  # Retry configuration
+  retry:
+    instances:
+      aiRiskService:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+  
+  # Rate limiter configuration
+  ratelimiter:
+    instances:
+      financialDataAccess:
+        limit-for-period: 1000
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+
+# Kafka Configuration for Event-Driven Architecture
+spring.kafka:
+  bootstrap-servers: kafka:9092
+  producer:
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    acks: all
+    retries: 3
+    batch-size: 16384
+    linger-ms: 5
+    buffer-memory: 33554432
+    # Financial services require exactly-once semantics
+    enable-idempotence: true
+    transaction-id-prefix: financial-wellness-
+  consumer:
+    group-id: financial-wellness-service
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    auto-offset-reset: earliest
+    enable-auto-commit: false
+    # Financial data processing requires manual acknowledgment
+    properties:
+      spring.json.trusted.packages: "com.ufs.wellness.events"
+  listener:
+    ack-mode: manual_immediate
+    concurrency: 3
+    poll-timeout: 3000
+
+# Custom application properties for financial wellness service
+app:
+  security:
+    # JWT configuration
+    jwt:
+      expiration: 3600  # 1 hour
+      refresh-expiration: 86400  # 24 hours
+      secret: ${JWT_SECRET:your-jwt-secret-key}
+    # API rate limiting
+    rate-limit:
+      requests-per-minute: 1000
+      requests-per-hour: 10000
+  
+  # Data retention policies for compliance
+  data:
+    retention:
+      customer-data: 2555  # 7 years in days
+      transaction-data: 3650  # 10 years in days
+      audit-logs: 2555  # 7 years in days
+    # Data encryption settings
+    encryption:
+      algorithm: AES-256-GCM
+      key-rotation-days: 90
+  
+  # Monitoring and alerting thresholds
+  monitoring:
+    # Performance thresholds
+    performance:
+      max-response-time: 1000ms
+      max-database-query-time: 500ms
+      max-external-api-time: 5000ms
+    # Business metrics thresholds
+    business:
+      min-recommendation-accuracy: 0.85
+      max-risk-assessment-time: 2000ms
+      min-customer-satisfaction: 4.0
+
+# Environment-specific overrides
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/financial-wellness-dev
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+logging:
+  level:
+    com.ufs.wellness: DEBUG
+    org.springframework.web: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: test
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/financial-wellness-test
+eureka:
+  client:
+    enabled: false
+logging:
+  level:
+    com.ufs.wellness: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  data:
+    mongodb:
+      uri: ${MONGODB_URI:mongodb://mongodb-cluster:27017/financial-wellness-prod}
+security:
+  require-ssl: true
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "health,info,prometheus,metrics"
+logging:
+  level:
+    root: WARN
+    com.ufs.wellness: INFO
