@@ -1,0 +1,66 @@
+# Test Configuration for Transaction Service
+# This configuration provides a controlled test environment with in-memory database,
+# disabled service discovery, and test-specific properties for security and messaging
+
+# Server Configuration
+# Port 0 enables random port assignment for parallel test execution
+server:
+  port: 0
+
+# Spring Framework Configuration
+spring:
+  # Application identification
+  application:
+    name: transaction-service
+
+  # H2 In-Memory Database Configuration for Testing
+  # Provides isolated, fast database for unit and integration tests
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ''
+    
+  # JPA and Hibernate Configuration for Test Environment
+  jpa:
+    # H2 Dialect for in-memory database operations
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      # Create-drop ensures clean database state for each test
+      ddl-auto: create-drop
+    # Enable SQL logging for debugging test scenarios
+    show-sql: true
+
+  # Kafka Configuration for Test Environment
+  # Uses environment variable with localhost fallback for CI/CD flexibility
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    consumer:
+      # Dedicated consumer group for test isolation
+      group-id: test-transaction-group
+
+  # OAuth2 Security Configuration for Testing
+  # Points to local Keycloak instance for integration testing
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Local Keycloak realm for test JWT validation
+          issuer-uri: http://localhost:8081/realms/ufs
+
+# Eureka Service Discovery Configuration
+# Disabled for testing to prevent external service dependencies
+eureka:
+  client:
+    enabled: false
+
+# Logging Configuration for Test Environment
+# Enhanced logging levels for debugging and test verification
+logging:
+  level:
+    # Transaction service package debug logging
+    com.ufs.transaction: DEBUG
+    # Spring web layer debugging for HTTP request/response analysis
+    org.springframework.web: DEBUG
+    # Hibernate SQL and transaction debugging
+    org.hibernate: DEBUG

@@ -1,0 +1,398 @@
+# Production Configuration for Risk Assessment Service
+# Supports F-002: AI-Powered Risk Assessment Engine
+# Configured for high availability, security, and regulatory compliance
+
+server:
+  port: 8082
+  servlet:
+    context-path: /api/v1
+    encoding:
+      charset: UTF-8
+      force: true
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 20
+    connection-timeout: 20000ms
+    keep-alive-timeout: 20000ms
+
+spring:
+  application:
+    name: risk-assessment-service
+  
+  # External configuration server integration
+  config:
+    import: optional:configserver:http://config-server:8888
+  
+  # Production profile activation
+  profiles:
+    active: prod
+  
+  # JPA Configuration for PostgreSQL (transactional data)
+  jpa:
+    hibernate:
+      ddl-auto: validate  # Production safety - no schema changes
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    show-sql: false  # Disabled for production performance
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc:
+          batch_size: 20
+          fetch_size: 50
+        connection:
+          pool_size: 20
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+  
+  # PostgreSQL Primary Database Configuration
+  datasource:
+    primary:
+      url: jdbc:postgresql://postgresql-prod:5432/riskdb
+      username: ${POSTGRES_USER}
+      password: ${POSTGRES_PASSWORD}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        pool-name: PostgreSQLPool
+        maximum-pool-size: 20
+        minimum-idle: 5
+        idle-timeout: 300000
+        max-lifetime: 1800000
+        connection-timeout: 20000
+        validation-timeout: 5000
+        leak-detection-threshold: 60000
+        connection-test-query: SELECT 1
+  
+  # MongoDB Configuration for analytics and document storage
+  data:
+    mongodb:
+      uri: mongodb://${MONGO_USER}:${MONGO_PASSWORD}@mongodb-prod:27017/riskdb?authSource=admin&readPreference=primary&ssl=false
+      database: riskdb
+      connection-pool:
+        max-size: 100
+        min-size: 10
+        max-wait-time: 10000ms
+        max-connection-idle-time: 300000ms
+        max-connection-life-time: 1800000ms
+        server-selection-timeout: 30000ms
+        socket-timeout: 30000ms
+        connect-timeout: 10000ms
+  
+  # Redis Configuration for caching and session management
+  redis:
+    host: redis-prod
+    port: 6379
+    password: ${REDIS_PASSWORD}
+    database: 0
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: 10000ms
+      shutdown-timeout: 200ms
+  
+  # Kafka Configuration for event streaming
+  kafka:
+    bootstrap-servers: kafka-prod:9092
+    security:
+      protocol: SASL_SSL
+    sasl:
+      mechanism: SCRAM-SHA-512
+      jaas:
+        config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USER}" password="${KAFKA_PASSWORD}";
+    consumer:
+      group-id: risk-assessment-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ufs.risk.events
+        max.poll.records: 100
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        fetch.min.bytes: 1024
+        fetch.max.wait.ms: 500
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      compression-type: lz4
+      enable-idempotence: true
+      properties:
+        max.in.flight.requests.per.connection: 5
+  
+  # Security Configuration for OAuth2 JWT
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+          cache-duration: PT15M
+    require-ssl: true
+  
+  # Cache Configuration
+  cache:
+    type: redis
+    redis:
+      cache-null-values: false
+      time-to-live: 600000ms
+      key-prefix: risk-assessment:
+      use-key-prefix: true
+
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    fetch-registry: true
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+  instance:
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    instance-id: ${spring.application.name}:${server.port}:${random.uuid}
+    metadata-map:
+      management.port: ${management.server.port:8082}
+      health.path: ${management.endpoints.web.base-path}/health
+
+# Logging Configuration for Production
+logging:
+  level:
+    root: INFO
+    com.ufs.risk: INFO
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: ERROR
+    org.apache.kafka: WARN
+    com.mongodb: WARN
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: /var/log/risk-assessment-service/application.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# Actuator Management Endpoints
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 15s
+        descriptions: true
+    tags:
+      application: ${spring.application.name}
+      environment: production
+    web:
+      server:
+        request:
+          autotime:
+            enabled: true
+            percentiles: 0.5,0.95,0.99
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+    db:
+      enabled: true
+    mongo:
+      enabled: true
+    redis:
+      enabled: true
+    kafka:
+      enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# Resilience4j Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    configs:
+      default:
+        registerHealthIndicator: true
+        slidingWindowType: COUNT_BASED
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 10s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+        recordExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+          - org.springframework.web.client.ResourceAccessException
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+    instances:
+      fraudDetectionService:
+        baseConfig: default
+        failureRateThreshold: 50
+        waitDurationInOpenState: 10s
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+      riskAssessmentModel:
+        baseConfig: default
+        slidingWindowType: TIME_BASED
+        slidingWindowSize: 30
+        failureRateThreshold: 60
+        waitDurationInOpenState: 20s
+        permittedNumberOfCallsInHalfOpenState: 5
+        minimumNumberOfCalls: 10
+  
+  # Retry Configuration
+  retry:
+    configs:
+      default:
+        maxAttempts: 3
+        waitDuration: 1000ms
+        retryExceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignoreExceptions:
+          - java.lang.IllegalArgumentException
+    instances:
+      externalApiRetry:
+        baseConfig: default
+        maxAttempts: 3
+        waitDuration: 2000ms
+  
+  # Rate Limiter Configuration
+  ratelimiter:
+    configs:
+      default:
+        registerHealthIndicator: true
+        limitForPeriod: 100
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0s
+        eventConsumerBufferSize: 100
+    instances:
+      riskAssessmentAPI:
+        baseConfig: default
+        limitForPeriod: 1000
+        limitRefreshPeriod: 1s
+
+# Custom Application Configuration
+risk-assessment:
+  ai-model:
+    endpoint: http://ml-service:8080/models/risk-assessment
+    timeout: 5000ms
+    batch-size: 100
+    confidence-threshold: 0.85
+  
+  fraud-detection:
+    endpoint: http://fraud-service:8080/api/detect
+    timeout: 3000ms
+    real-time-threshold: 100ms
+  
+  compliance:
+    kyc-validation-enabled: true
+    aml-screening-enabled: true
+    sanctions-check-enabled: true
+    reporting-interval: 24h
+  
+  cache:
+    customer-profiles:
+      ttl: 3600s
+      max-size: 10000
+    risk-scores:
+      ttl: 1800s
+      max-size: 50000
+    model-predictions:
+      ttl: 300s
+      max-size: 100000
+
+# Thread Pool Configuration
+task:
+  execution:
+    pool:
+      core-size: 20
+      max-size: 50
+      queue-capacity: 100
+      thread-name-prefix: RiskAssessment-
+      keep-alive: 60s
+
+# SSL/TLS Configuration
+server:
+  ssl:
+    enabled: false  # Handled by load balancer/ingress
+  forward-headers-strategy: native
+
+# Compression and Performance
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: NON_NULL
+
+# Connection Timeout Configuration
+spring:
+  cloud:
+    loadbalancer:
+      retry:
+        enabled: true
+      health-check:
+        initial-delay: 30s
+        interval: 30s
+
+# Distributed Tracing Configuration
+management:
+  tracing:
+    sampling:
+      probability: 0.1  # 10% sampling for production
+  zipkin:
+    tracing:
+      endpoint: http://zipkin:9411/api/v2/spans
+
+# Custom Health Indicators
+risk-assessment:
+  health:
+    database-connection-timeout: 5000ms
+    external-service-timeout: 3000ms
+    model-health-check-interval: 300s

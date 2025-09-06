@@ -1,0 +1,333 @@
+# Prometheus Configuration for Unified Financial Services Platform
+# This configuration enables comprehensive monitoring of microservices, infrastructure,
+# and business metrics across the financial services ecosystem
+
+# Global configuration settings
+global:
+  # Set the scrape interval to every 15 seconds. Default is every 1 minute.
+  scrape_interval: 15s
+  
+  # Evaluate rules every 15 seconds. Default is every 1 minute.
+  evaluation_interval: 15s
+  
+  # External labels to add to any time series or alerts when communicating with
+  # external systems (federation, remote storage, Alertmanager).
+  external_labels:
+    monitor: 'ufs-platform-monitor'
+    environment: 'production'
+    cluster: 'financial-services'
+    region: 'us-east-1'
+
+# Alertmanager configuration for routing alerts
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - 'alertmanager:9093'
+      timeout: 10s
+      api_version: v2
+
+# Load rules from specified files and evaluate them according to the global 'evaluation_interval'.
+rule_files:
+  - "financial_services_rules.yml"
+  - "infrastructure_rules.yml"
+  - "business_metrics_rules.yml"
+  - "security_monitoring_rules.yml"
+  - "cost_optimization_rules.yml"
+
+# Scrape configuration for various services and infrastructure components
+scrape_configs:
+  # Prometheus self-monitoring
+  - job_name: 'prometheus'
+    static_configs:
+      - targets: ['localhost:9090']
+    scrape_interval: 15s
+    metrics_path: /metrics
+    honor_labels: true
+
+  # Kubernetes pod discovery with Prometheus annotations
+  - job_name: 'kubernetes-pods'
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: 'https://kubernetes.default.svc:443'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    relabel_configs:
+      # Only scrape pods that have the prometheus.io/scrape annotation set to true
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+        action: keep
+        regex: true
+      
+      # Use the prometheus.io/path annotation to specify the metrics path
+      - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+        action: replace
+        target_label: __metrics_path__
+        regex: (.+)
+        replacement: ${1}
+      
+      # Use the prometheus.io/port annotation to specify the port
+      - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+        action: replace
+        regex: ([^:]+)(?::\d+)?;(\d+)
+        replacement: $1:$2
+        target_label: __address__
+      
+      # Add Kubernetes namespace as a label
+      - source_labels: [__meta_kubernetes_namespace]
+        action: replace
+        target_label: kubernetes_namespace
+      
+      # Add Kubernetes pod name as a label
+      - source_labels: [__meta_kubernetes_pod_name]
+        action: replace
+        target_label: kubernetes_pod_name
+      
+      # Add Kubernetes service name as a label
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: replace
+        target_label: kubernetes_service_name
+
+  # Java Spring Boot microservices with Actuator endpoints
+  - job_name: 'java-microservices'
+    scrape_interval: 10s
+    scrape_timeout: 10s
+    metrics_path: '/actuator/prometheus'
+    
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: 'https://kubernetes.default.svc:443'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    relabel_configs:
+      # Only scrape Java Spring Boot services
+      - source_labels: [__meta_kubernetes_pod_label_app_type]
+        action: keep
+        regex: java-spring-boot
+      
+      # Add service-specific labels
+      - source_labels: [__meta_kubernetes_pod_label_service_name]
+        action: replace
+        target_label: service_name
+      
+      - source_labels: [__meta_kubernetes_pod_label_version]
+        action: replace
+        target_label: service_version
+      
+      # Add financial service category label
+      - source_labels: [__meta_kubernetes_pod_label_financial_category]
+        action: replace
+        target_label: financial_category
+
+  # Node.js services metrics collection
+  - job_name: 'nodejs-services'
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    metrics_path: '/metrics'
+    
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: 'https://kubernetes.default.svc:443'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    relabel_configs:
+      # Only scrape Node.js services
+      - source_labels: [__meta_kubernetes_pod_label_app_type]
+        action: keep
+        regex: nodejs
+      
+      # Add Node.js specific labels
+      - source_labels: [__meta_kubernetes_pod_label_nodejs_version]
+        action: replace
+        target_label: nodejs_version
+      
+      - source_labels: [__meta_kubernetes_pod_label_service_tier]
+        action: replace
+        target_label: service_tier
+
+  # Python AI/ML services for fraud detection and risk assessment
+  - job_name: 'python-ai-service'
+    scrape_interval: 10s
+    scrape_timeout: 8s
+    metrics_path: '/metrics'
+    
+    kubernetes_sd_configs:
+      - role: pod
+        api_server: 'https://kubernetes.default.svc:443'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    relabel_configs:
+      # Only scrape AI service pods
+      - source_labels: [__meta_kubernetes_pod_label_app]
+        action: keep
+        regex: ai-service
+      
+      # Add AI/ML specific labels
+      - source_labels: [__meta_kubernetes_pod_label_model_version]
+        action: replace
+        target_label: model_version
+      
+      - source_labels: [__meta_kubernetes_pod_label_ai_category]
+        action: replace
+        target_label: ai_category
+
+  # Node Exporter for infrastructure metrics
+  - job_name: 'node-exporter'
+    scrape_interval: 15s
+    scrape_timeout: 10s
+    
+    kubernetes_sd_configs:
+      - role: node
+        api_server: 'https://kubernetes.default.svc:443'
+        tls_config:
+          ca_file: /var/run/secrets/kubernetes.io/serviceaccount/ca.crt
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+    
+    relabel_configs:
+      # Map Kubernetes node labels to Prometheus labels
+      - action: labelmap
+        regex: __meta_kubernetes_node_label_(.+)
+      
+      # Configure target address for node proxy
+      - target_label: __address__
+        replacement: kubernetes.default.svc:443
+      
+      # Configure metrics path through Kubernetes API proxy
+      - source_labels: [__meta_kubernetes_node_name]
+        regex: (.+)
+        target_label: __metrics_path__
+        replacement: /api/v1/nodes/${1}/proxy/metrics
+      
+      # Add node role information
+      - source_labels: [__meta_kubernetes_node_label_kubernetes_io_role]
+        action: replace
+        target_label: node_role
+
+  # Financial Services specific endpoints
+  - job_name: 'payment-gateway'
+    static_configs:
+      - targets: ['payment-gateway:8080']
+    scrape_interval: 5s  # High frequency for critical payment metrics
+    metrics_path: '/actuator/prometheus'
+    honor_labels: true
+    params:
+      collect[]: ['financial_transactions', 'payment_latency', 'fraud_detection']
+
+  # Trading and market data services
+  - job_name: 'trading-engine'
+    static_configs:
+      - targets: ['trading-engine:8081']
+    scrape_interval: 5s  # Real-time trading metrics
+    metrics_path: '/metrics'
+    honor_labels: true
+
+  # Customer onboarding and KYC services
+  - job_name: 'kyc-service'
+    static_configs:
+      - targets: ['kyc-service:8082']
+    scrape_interval: 30s
+    metrics_path: '/actuator/prometheus'
+    honor_labels: true
+
+  # Database exporters
+  - job_name: 'postgres-exporter'
+    static_configs:
+      - targets: ['postgres-exporter:9187']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  - job_name: 'mongodb-exporter'
+    static_configs:
+      - targets: ['mongodb-exporter:9216']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  - job_name: 'redis-exporter'
+    static_configs:
+      - targets: ['redis-exporter:9121']
+    scrape_interval: 15s
+    metrics_path: '/metrics'
+
+  # Message broker monitoring
+  - job_name: 'kafka-exporter'
+    static_configs:
+      - targets: ['kafka-exporter:9308']
+    scrape_interval: 30s
+    metrics_path: '/metrics'
+
+  # API Gateway monitoring (Kong)
+  - job_name: 'kong-prometheus'
+    static_configs:
+      - targets: ['kong:8001']
+    scrape_interval: 10s
+    metrics_path: '/metrics'
+    honor_labels: true
+
+  # Service mesh monitoring (Istio)
+  - job_name: 'istio-mesh'
+    kubernetes_sd_configs:
+      - role: endpoints
+        namespaces:
+          names:
+          - istio-system
+    
+    relabel_configs:
+      - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+        action: keep
+        regex: istio-proxy;http-monitoring
+
+  # Blockchain network monitoring (Hyperledger Fabric)
+  - job_name: 'hyperledger-fabric'
+    static_configs:
+      - targets: ['fabric-peer:9443', 'fabric-orderer:9443']
+    scrape_interval: 20s
+    metrics_path: '/metrics'
+    scheme: https
+    tls_config:
+      insecure_skip_verify: true
+
+  # External service health checks
+  - job_name: 'blackbox-exporter'
+    metrics_path: /probe
+    params:
+      module: [http_2xx]
+    static_configs:
+      - targets:
+        - https://api.stripe.com/v1/charges  # Payment gateway health
+        - https://production.plaid.com/health  # Banking data API health
+        - https://api.experian.com/health  # Credit scoring API health
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox-exporter:9115
+
+# Remote write configuration for long-term storage (optional)
+remote_write:
+  - url: "https://prometheus-remote-storage.financial-services.internal/api/v1/write"
+    name: "financial-services-remote-storage"
+    queue_config:
+      max_samples_per_send: 10000
+      max_shards: 200
+      capacity: 100000
+    write_relabel_configs:
+      # Only send critical financial metrics to remote storage
+      - source_labels: [__name__]
+        regex: '(transaction_.*|payment_.*|fraud_.*|trading_.*|kyc_.*)'
+        action: keep
+
+# Storage configuration
+storage:
+  tsdb:
+    retention.time: 30d
+    retention.size: 100GB
+    wal-compression: true

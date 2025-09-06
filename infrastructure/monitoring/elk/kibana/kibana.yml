@@ -1,0 +1,269 @@
+# =============================================================================
+# Kibana Configuration for Unified Financial Services Platform (UFS)
+# =============================================================================
+# This configuration file defines the settings for Kibana, the visualization
+# component of the ELK stack, providing log analysis and monitoring capabilities
+# for the financial services microservices architecture.
+# =============================================================================
+
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+# Basic server settings for Kibana instance
+server.port: 5601
+server.host: "0.0.0.0"
+server.name: "ufs-kibana"
+
+# Server base path for reverse proxy setups
+server.basePath: ""
+server.rewriteBasePath: false
+
+# Maximum payload size for requests (important for financial data)
+server.maxPayload: 1048576
+
+# SSL/TLS Configuration for production security
+server.ssl.enabled: false
+server.ssl.certificate: ""
+server.ssl.key: ""
+
+# Request timeout settings optimized for financial data queries
+server.keepaliveTimeout: 120000
+server.socketTimeout: 120000
+
+# =============================================================================
+# ELASTICSEARCH CONNECTION CONFIGURATION
+# =============================================================================
+# Connection settings to Elasticsearch cluster
+elasticsearch.hosts: ["http://elasticsearch:9200"]
+
+# Authentication credentials for Kibana system user
+elasticsearch.username: "kibana_system"
+elasticsearch.password: "${KIBANA_SYSTEM_PASSWORD}"
+
+# Connection pool and timeout settings for high-availability
+elasticsearch.pingTimeout: 1500
+elasticsearch.requestTimeout: 30000
+elasticsearch.shardTimeout: 30000
+
+# SSL/TLS settings for Elasticsearch connection (production)
+elasticsearch.ssl.verificationMode: "none"
+elasticsearch.ssl.certificate: ""
+elasticsearch.ssl.key: ""
+elasticsearch.ssl.certificateAuthorities: []
+
+# Connection pool settings for performance optimization
+elasticsearch.maxSockets: 100
+elasticsearch.keepAlive: true
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+# Logging settings optimized for containerized financial services environment
+logging.dest: stdout
+logging.verbose: false
+logging.quiet: false
+logging.silent: false
+
+# Log rotation and retention for compliance requirements
+logging.rotate.enabled: true
+logging.rotate.everyBytes: 10485760
+logging.rotate.keepFiles: 7
+
+# Structured logging for better analysis
+logging.json: true
+
+# Application-specific log levels
+logging.events:
+  log: ['warning', 'error', 'fatal']
+  response: ['error']
+  error: ['error', 'fatal']
+
+# =============================================================================
+# X-PACK SECURITY CONFIGURATION
+# =============================================================================
+# Security settings required for financial services compliance
+xpack.security.enabled: true
+xpack.security.encryptionKey: "${KIBANA_ENCRYPTION_KEY}"
+
+# Session and authentication settings
+xpack.security.sessionTimeout: 1800000
+xpack.security.session.idleTimeout: 3600000
+xpack.security.session.cleanupInterval: 300000
+
+# Secure cookie settings
+xpack.security.secureCookies: true
+xpack.security.sameSiteCookies: "Strict"
+
+# Keystore configuration for secure credential storage
+xpack.security.secure_settings.keystore.path: "/usr/share/kibana/config/kibana.keystore"
+
+# Authentication providers for financial services
+xpack.security.authc.providers:
+  basic.basic1:
+    order: 0
+    enabled: true
+  saml.saml1:
+    order: 1
+    enabled: false
+
+# =============================================================================
+# X-PACK MONITORING CONFIGURATION
+# =============================================================================
+# Monitoring settings for observability and compliance
+xpack.monitoring.ui.container.elasticsearch.enabled: true
+xpack.monitoring.enabled: true
+xpack.monitoring.collection.enabled: true
+xpack.monitoring.collection.interval: 10000
+
+# Monitoring data retention for regulatory compliance
+xpack.monitoring.history.duration: "7d"
+
+# Cluster health monitoring thresholds
+xpack.monitoring.cluster_alerts.enabled: true
+xpack.monitoring.cluster_alerts.email.enabled: false
+
+# =============================================================================
+# X-PACK REPORTING CONFIGURATION
+# =============================================================================
+# Reporting settings for financial compliance and audit requirements
+xpack.reporting.enabled: true
+xpack.reporting.encryptionKey: "${KIBANA_REPORTING_ENCRYPTION_KEY}"
+
+# Report generation settings optimized for financial data
+xpack.reporting.queue.timeout: 120000
+xpack.reporting.capture.timeout: 30000
+xpack.reporting.capture.maxAttempts: 3
+
+# CSV export limits for financial data compliance
+xpack.reporting.csv.maxSizeBytes: 104857600
+xpack.reporting.csv.scroll.duration: "30s"
+
+# PDF report settings for regulatory documentation
+xpack.reporting.roles.enabled: true
+xpack.reporting.capture.browser.chromium.disableSandbox: true
+
+# =============================================================================
+# X-PACK ALERTING CONFIGURATION
+# =============================================================================
+# Alerting system for financial services monitoring
+xpack.alerting.enabled: true
+xpack.alerting.healthCheck.interval: "60s"
+
+# Alert execution settings
+xpack.alerting.defaultRuleTaskTimeout: "5m"
+xpack.alerting.maxEphemeralActionsPerAlert: 10
+
+# =============================================================================
+# INDEX MANAGEMENT CONFIGURATION
+# =============================================================================
+# Index patterns and management for financial data
+kibana.index: ".kibana"
+kibana.autocompleteTimeout: 1000
+kibana.autocompleteTerminateAfter: 100000
+
+# Default index pattern for financial services logs
+kibana.defaultAppId: "discover"
+
+# =============================================================================
+# DATA VIEW CONFIGURATION
+# =============================================================================
+# Data view settings for financial services data patterns
+data.search.aggs.shardDelay.enabled: true
+data.search.sessions.enabled: true
+data.search.usageTelemetry.enabled: false
+
+# Query timeout for complex financial data analysis
+data.search.timeout: 60000
+
+# =============================================================================
+# PERFORMANCE OPTIMIZATION
+# =============================================================================
+# Memory and performance settings for financial data processing
+ops.interval: 5000
+ops.cGroupOverrides.cpuPath: ""
+ops.cGroupOverrides.cpuAcctPath: ""
+
+# Browser cache settings for dashboard performance
+server.compression.enabled: true
+server.compression.referrerWhitelist: []
+
+# =============================================================================
+# INTERNATIONALIZATION
+# =============================================================================
+# Language settings for global financial services
+i18n.locale: "en"
+
+# =============================================================================
+# TELEMETRY CONFIGURATION
+# =============================================================================
+# Telemetry settings (disabled for financial data privacy)
+telemetry.enabled: false
+telemetry.optIn: false
+telemetry.allowChangingOptInStatus: false
+
+# =============================================================================
+# ADVANCED SETTINGS
+# =============================================================================
+# Advanced configuration for financial services requirements
+
+# Memory circuit breaker to prevent OOM in large financial datasets
+elasticsearch.requestHeadersWhitelist: ["authorization", "content-type", "kbn-version", "x-elastic-product-origin"]
+
+# Custom headers for financial services compliance
+elasticsearch.customHeaders: {}
+
+# License management for X-Pack features
+xpack.licensing.api_polling_frequency: 30000
+
+# Task manager configuration for background processing
+xpack.task_manager.enabled: true
+xpack.task_manager.max_workers: 10
+xpack.task_manager.poll_interval: 3000
+
+# =============================================================================
+# DASHBOARD AND VISUALIZATION LIMITS
+# =============================================================================
+# Limits configured for financial data visualization requirements
+discover.sampleSize: 500
+histogram:maxBars: 100
+visualize:enableLabs: false
+
+# Maximum number of buckets for aggregations (financial data analysis)
+data.search.aggs.buckets.maxBuckets: 65536
+
+# =============================================================================
+# AUDIT AND COMPLIANCE SETTINGS
+# =============================================================================
+# Settings to support financial services audit and compliance requirements
+
+# Space management for multi-tenant financial services
+xpack.spaces.enabled: true
+xpack.spaces.maxSpaces: 1000
+
+# Features configuration for compliance
+xpack.features.enabled: true
+
+# License notification settings
+xpack.license_management.enabled: true
+
+# =============================================================================
+# DEVELOPMENT AND DEBUGGING
+# =============================================================================
+# Settings for development and troubleshooting (adjust for production)
+status.allowAnonymous: false
+console.enabled: true
+dev.basePathProxyTarget: ""
+
+# =============================================================================
+# MIGRATION SETTINGS
+# =============================================================================
+# Settings for Kibana migrations and upgrades
+migrations.batchSize: 1000
+migrations.maxBatchSizeBytes: 104857600
+migrations.pollInterval: 1500
+migrations.scrollDuration: "15m"
+migrations.skip: false
+
+# =============================================================================
+# END OF CONFIGURATION
+# =============================================================================

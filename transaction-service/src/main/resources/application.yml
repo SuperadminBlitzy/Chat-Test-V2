@@ -1,0 +1,407 @@
+# Spring Boot Application Configuration for Transaction Service
+# This configuration supports Spring Boot 3.2+ with Java 21 LTS
+# Implements enterprise-grade settings for financial services platform
+
+spring:
+  # Application Identity Configuration
+  application:
+    name: transaction-service
+    
+  # Spring Cloud Config Server Integration
+  # Enables centralized configuration management across microservices
+  config:
+    import: optional:configserver:http://config-server:8888
+    
+  # Primary Data Source Configuration - PostgreSQL 16+
+  # Implements connection pooling based on enterprise requirements
+  datasource:
+    url: jdbc:postgresql://postgresql:5432/transactiondb
+    username: ${DB_USERNAME:user}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration
+    # Based on PostgreSQL Connection Pool Configuration specifications
+    hikari:
+      pool-name: TransactionServiceHikariCP
+      minimum-idle: 5
+      maximum-pool-size: 20
+      max-lifetime: 3600000  # 1 hour in milliseconds
+      connection-timeout: 30000  # 30 seconds
+      idle-timeout: 600000  # 10 minutes
+      leak-detection-threshold: 60000  # 1 minute
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+      auto-commit: false
+      
+  # JPA and Hibernate Configuration
+  # Optimized for PostgreSQL dialect and financial data requirements
+  jpa:
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    hibernate:
+      ddl-auto: validate  # Use validate for production safety
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        show_sql: false
+        use_sql_comments: false
+        batch_size: 25
+        order_inserts: true
+        order_updates: true
+        jdbc:
+          batch_size: 25
+          time_zone: UTC
+        connection:
+          provider_disables_autocommit: true
+          
+  # Apache Kafka Configuration for Event-Driven Architecture
+  # Supports real-time transaction processing and event streaming
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+    
+    # Consumer Configuration for Transaction Events
+    consumer:
+      group-id: transaction-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      enable-auto-commit: false
+      properties:
+        spring.json.trusted.packages: com.ufs.transaction.event,com.ufs.payment.event,com.ufs.risk.event
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 10000
+      max.poll.records: 100
+      fetch.min.bytes: 1024
+      fetch.max.wait.ms: 5000
+      
+    # Producer Configuration for Transaction Events
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch.size: 16384
+      linger.ms: 100
+      buffer.memory: 33554432
+      compression.type: snappy
+      max.in.flight.requests.per.connection: 1
+      enable.idempotence: true
+      
+    # Administrative Configuration
+    admin:
+      properties:
+        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:kafka:9092}
+        
+  # JSON Serialization Configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-durations-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+      adjust-dates-to-context-time-zone: false
+    time-zone: UTC
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSSZ
+    
+  # Transaction Management Configuration
+  transaction:
+    default-timeout: 30s
+    rollback-on-commit-failure: true
+    
+# Server Configuration
+# Configured for microservices deployment with health checks
+server:
+  port: ${SERVER_PORT:8082}
+  servlet:
+    context-path: /api/v1
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+    
+# Eureka Service Discovery Configuration
+# Integrates with Netflix Eureka for service registration and discovery
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_URL:http://discovery-service:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    initial-instance-info-replication-interval-seconds: 5
+    instance-info-replication-interval-seconds: 30
+    registry-fetch-interval-seconds: 30
+  instance:
+    hostname: ${HOSTNAME:transaction-service}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      environment: ${ENVIRONMENT:development}
+      
+# Spring Boot Actuator Management Configuration
+# Enables comprehensive monitoring and metrics collection
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,threaddump,heapdump,env,configprops
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,HEAD,POST,PUT,DELETE,OPTIONS
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: always
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+    db:
+      enabled: true
+    kafka:
+      enabled: true
+      
+  # Metrics Configuration for Prometheus Integration
+  metrics:
+    enable:
+      all: true
+    export:
+      prometheus:
+        enabled: true
+        descriptions: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.kafka.consumer: true
+        spring.kafka.producer: true
+      sla:
+        http.server.requests: 50ms,100ms,200ms,400ms
+        
+# OAuth2 Resource Server Configuration
+# Implements JWT-based authentication for secure microservices communication
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: ${JWT_ISSUER_URI:http://auth-service:9000}
+        jwk-set-uri: ${JWT_ISSUER_URI:http://auth-service:9000}/.well-known/jwks.json
+        cache-duration: PT5M  # Cache JWK set for 5 minutes
+        
+# Application-Specific Configuration
+# Defines service-specific properties and integration endpoints
+app:
+  # Kafka Topic Configuration
+  kafka:
+    topics:
+      transaction-events: ${KAFKA_TRANSACTION_TOPIC:transaction-events}
+      payment-events: ${KAFKA_PAYMENT_TOPIC:payment-events}
+      risk-assessment-events: risk-assessment-events
+      compliance-events: compliance-events
+      fraud-detection-events: fraud-detection-events
+      audit-events: audit-events
+    
+  # Microservices Integration Configuration
+  services:
+    risk-assessment:
+      url: ${RISK_ASSESSMENT_SERVICE_URL:http://risk-assessment-service:8083}
+      timeout: 5s
+      retry-attempts: 3
+      circuit-breaker:
+        failure-threshold: 5
+        recovery-timeout: 30s
+        
+    compliance:
+      url: ${COMPLIANCE_SERVICE_URL:http://compliance-service:8084}
+      timeout: 10s
+      retry-attempts: 2
+      circuit-breaker:
+        failure-threshold: 3
+        recovery-timeout: 60s
+        
+    blockchain:
+      url: ${BLOCKCHAIN_SERVICE_URL:http://blockchain-service:3000}
+      timeout: 15s
+      retry-attempts: 2
+      circuit-breaker:
+        failure-threshold: 5
+        recovery-timeout: 120s
+        
+    notification:
+      url: ${NOTIFICATION_SERVICE_URL:http://notification-service:8085}
+      timeout: 3s
+      retry-attempts: 3
+      
+  # Transaction Processing Configuration
+  transaction:
+    processing:
+      max-amount: ${MAX_TRANSACTION_AMOUNT:1000000.00}
+      daily-limit: ${DAILY_TRANSACTION_LIMIT:10000000.00}
+      batch-size: ${TRANSACTION_BATCH_SIZE:100}
+      timeout: ${TRANSACTION_TIMEOUT:30s}
+      
+  # Risk Assessment Configuration
+  risk:
+    thresholds:
+      high-risk: ${HIGH_RISK_THRESHOLD:0.8}
+      medium-risk: ${MEDIUM_RISK_THRESHOLD:0.5}
+      low-risk: ${LOW_RISK_THRESHOLD:0.2}
+      
+  # Audit and Compliance Configuration
+  audit:
+    enabled: true
+    log-level: INFO
+    retention-days: ${AUDIT_RETENTION_DAYS:2555}  # 7 years for financial compliance
+    
+  # Cache Configuration
+  cache:
+    transaction:
+      ttl: PT10M  # 10 minutes
+      max-size: 10000
+    risk-score:
+      ttl: PT5M   # 5 minutes
+      max-size: 50000
+      
+# Logging Configuration
+# Implements structured logging for financial services compliance
+logging:
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    com.ufs.transaction: ${LOG_LEVEL_APP:INFO}
+    org.springframework.kafka: ${LOG_LEVEL_KAFKA:WARN}
+    org.springframework.security: ${LOG_LEVEL_SECURITY:WARN}
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_SQL_PARAMS:WARN}
+    org.springframework.web: ${LOG_LEVEL_WEB:INFO}
+    org.springframework.transaction: ${LOG_LEVEL_TRANSACTION:INFO}
+    
+  pattern:
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%highlight(%5p)] [%blue(%t)] %yellow(%C{1.}): %msg%n%throwable"
+    
+  file:
+    name: ${LOG_FILE_NAME:logs/transaction-service.log}
+    max-size: ${LOG_FILE_MAX_SIZE:100MB}
+    max-history: ${LOG_FILE_MAX_HISTORY:30}
+    total-size-cap: ${LOG_FILE_TOTAL_SIZE:10GB}
+    
+# Resilience4j Configuration for Circuit Breaker Pattern
+resilience4j:
+  circuitbreaker:
+    instances:
+      risk-assessment-service:
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        
+      compliance-service:
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 60s
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        
+      blockchain-service:
+        failure-rate-threshold: 70
+        wait-duration-in-open-state: 120s
+        sliding-window-size: 15
+        minimum-number-of-calls: 8
+        
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 1s
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.util.concurrent.TimeoutException
+          
+  timelimiter:
+    instances:
+      default:
+        timeout-duration: 30s
+        cancel-running-future: true
+
+# Environment-Specific Profiles Configuration
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+      
+# Development-specific overrides
+logging:
+  level:
+    com.ufs.transaction: DEBUG
+    org.springframework.kafka: INFO
+    
+app:
+  transaction:
+    processing:
+      max-amount: 10000.00
+      daily-limit: 100000.00
+      
+---
+spring:
+  config:
+    activate:
+      on-profile: staging
+      
+# Staging-specific overrides
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: update
+      
+logging:
+  level:
+    com.ufs.transaction: INFO
+    
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+      
+# Production-specific overrides
+spring:
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    
+logging:
+  level:
+    root: WARN
+    com.ufs.transaction: INFO
+    
+management:
+  endpoint:
+    health:
+      show-details: never

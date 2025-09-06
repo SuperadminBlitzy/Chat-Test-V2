@@ -1,0 +1,272 @@
+# ==============================================================================
+# ELASTICSEARCH CONFIGURATION FOR UNIFIED FINANCIAL SERVICES PLATFORM
+# ==============================================================================
+# This configuration provides enterprise-grade settings for Elasticsearch
+# supporting financial services logging, compliance, and monitoring requirements
+# Version: Elasticsearch 8.11+
+# ==============================================================================
+
+# ==============================================================================
+# CLUSTER CONFIGURATION
+# ==============================================================================
+
+# Cluster identification for financial services logging
+cluster.name: ufs-logging-cluster
+
+# Node identification and roles
+node.name: ${HOSTNAME}
+node.roles: ["master", "data", "ingest"]
+
+# Additional node attributes for financial compliance
+node.attr.datacenter: ${DATACENTER:primary}
+node.attr.environment: ${ENVIRONMENT:production}
+node.attr.compliance_zone: financial-services
+
+# ==============================================================================
+# NETWORK CONFIGURATION
+# ==============================================================================
+
+# Network binding for Kubernetes deployment
+network.host: 0.0.0.0
+network.bind_host: 0.0.0.0
+network.publish_host: ${HOSTNAME}.elasticsearch-headless.default.svc.cluster.local
+
+# Port configuration
+http.port: 9200
+transport.port: 9300
+
+# HTTP configuration for financial services API compliance
+http.cors.enabled: false
+http.compression: true
+http.compression_level: 6
+http.max_content_length: 100mb
+http.max_chunk_size: 8kb
+http.max_header_size: 8kb
+http.max_initial_line_length: 4kb
+
+# ==============================================================================
+# CLUSTER DISCOVERY AND FORMATION
+# ==============================================================================
+
+# Discovery configuration for Kubernetes StatefulSet
+discovery.seed_hosts: ["elasticsearch-0.elasticsearch-headless.default.svc.cluster.local", "elasticsearch-1.elasticsearch-headless.default.svc.cluster.local", "elasticsearch-2.elasticsearch-headless.default.svc.cluster.local"]
+
+# Initial master nodes for cluster bootstrapping
+cluster.initial_master_nodes: ["elasticsearch-0", "elasticsearch-1", "elasticsearch-2"]
+
+# Discovery and cluster formation settings
+discovery.zen.minimum_master_nodes: 2
+discovery.zen.ping_timeout: 30s
+discovery.zen.fd.ping_interval: 1s
+discovery.zen.fd.ping_timeout: 30s
+discovery.zen.fd.ping_retries: 3
+
+# Cluster state and metadata settings
+cluster.max_voting_config_exclusions: 5
+cluster.auto_shrink_voting_configuration: true
+cluster.publish.timeout: 30s
+
+# ==============================================================================
+# SECURITY CONFIGURATION
+# ==============================================================================
+
+# Enable X-Pack Security for financial compliance
+xpack.security.enabled: true
+
+# Authentication and authorization
+xpack.security.authc.api_key.enabled: true
+xpack.security.authc.token.enabled: true
+
+# HTTP SSL/TLS configuration for secure communication
+xpack.security.http.ssl.enabled: true
+xpack.security.http.ssl.key: /usr/share/elasticsearch/config/certs/tls.key
+xpack.security.http.ssl.certificate: /usr/share/elasticsearch/config/certs/tls.crt
+xpack.security.http.ssl.certificate_authorities: ["/usr/share/elasticsearch/config/certs/ca.crt"]
+xpack.security.http.ssl.verification_mode: certificate
+xpack.security.http.ssl.client_authentication: optional
+
+# Transport SSL/TLS configuration for inter-node communication
+xpack.security.transport.ssl.enabled: true
+xpack.security.transport.ssl.verification_mode: certificate
+xpack.security.transport.ssl.key: /usr/share/elasticsearch/config/certs/tls.key
+xpack.security.transport.ssl.certificate: /usr/share/elasticsearch/config/certs/tls.crt
+xpack.security.transport.ssl.certificate_authorities: ["/usr/share/elasticsearch/config/certs/ca.crt"]
+xpack.security.transport.ssl.client_authentication: required
+
+# Audit logging for financial compliance and regulatory requirements
+xpack.security.audit.enabled: true
+xpack.security.audit.outputs: [index, logfile]
+xpack.security.audit.logfile.events.emit_request_body: true
+xpack.security.audit.index.events.emit_request_body: true
+xpack.security.audit.logfile.events.include: [authentication_success, authentication_failed, access_granted, access_denied, tampered_request, connection_granted, connection_denied, run_as_granted, run_as_denied]
+
+# ==============================================================================
+# DATA PATHS CONFIGURATION
+# ==============================================================================
+
+# Data and log paths for persistent storage
+path.data: /usr/share/elasticsearch/data
+path.logs: /usr/share/elasticsearch/logs
+path.repo: ["/usr/share/elasticsearch/backup"]
+
+# ==============================================================================
+# MEMORY AND PERFORMANCE CONFIGURATION
+# ==============================================================================
+
+# Bootstrap memory lock for performance
+bootstrap.memory_lock: true
+
+# Circuit breaker settings for financial transaction processing
+indices.breaker.total.use_real_memory: false
+indices.breaker.total.limit: 95%
+indices.breaker.fielddata.limit: 40%
+indices.breaker.request.limit: 60%
+indices.breaker.in_flight_requests.limit: 100%
+
+# Thread pool configuration for high-volume financial data processing
+thread_pool.write.size: 8
+thread_pool.write.queue_size: 1000
+thread_pool.search.size: 13
+thread_pool.search.queue_size: 1000
+thread_pool.get.size: 8
+thread_pool.get.queue_size: 1000
+
+# ==============================================================================
+# INDEX CONFIGURATION
+# ==============================================================================
+
+# Default index settings for financial services logging
+index.number_of_shards: 3
+index.number_of_replicas: 1
+index.refresh_interval: 30s
+index.translog.flush_threshold_size: 1gb
+index.translog.sync_interval: 30s
+
+# Index lifecycle management for regulatory compliance
+index.lifecycle.name: financial_services_policy
+index.lifecycle.rollover_alias: financial-logs
+
+# Search and indexing performance optimization
+index.search.slowlog.threshold.query.warn: 10s
+index.search.slowlog.threshold.query.info: 5s
+index.search.slowlog.threshold.query.debug: 2s
+index.search.slowlog.threshold.fetch.warn: 1s
+index.search.slowlog.threshold.fetch.info: 800ms
+index.search.slowlog.threshold.fetch.debug: 500ms
+
+index.indexing.slowlog.threshold.index.warn: 10s
+index.indexing.slowlog.threshold.index.info: 5s
+index.indexing.slowlog.threshold.index.debug: 2s
+
+# ==============================================================================
+# MONITORING AND OBSERVABILITY
+# ==============================================================================
+
+# X-Pack Monitoring for integration with financial services monitoring stack
+xpack.monitoring.enabled: true
+xpack.monitoring.collection.enabled: true
+xpack.monitoring.collection.interval: 10s
+xpack.monitoring.exporters.prometheus.type: http
+xpack.monitoring.exporters.prometheus.host: ["prometheus-server.monitoring.svc.cluster.local:9090"]
+
+# Machine Learning for anomaly detection in financial transactions
+xpack.ml.enabled: true
+xpack.ml.node_concurrent_job_allocations: 2
+
+# Watcher for real-time alerting on financial anomalies
+xpack.watcher.enabled: true
+
+# ==============================================================================
+# GATEWAY AND RECOVERY CONFIGURATION
+# ==============================================================================
+
+# Gateway recovery settings for cluster resilience
+gateway.expected_nodes: 3
+gateway.expected_master_nodes: 3
+gateway.expected_data_nodes: 3
+gateway.recover_after_time: 5m
+gateway.recover_after_nodes: 2
+gateway.recover_after_master_nodes: 2
+gateway.recover_after_data_nodes: 2
+
+# ==============================================================================
+# SNAPSHOT AND RESTORE CONFIGURATION
+# ==============================================================================
+
+# Repository settings for backup and disaster recovery
+repositories.url.allowed_urls: ["https://backup.ufs-platform.com/*"]
+repositories.fs.compress: true
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+
+# Application logging levels for financial services compliance
+logger.org.elasticsearch.discovery: WARN
+logger.org.elasticsearch.cluster.service: INFO
+logger.org.elasticsearch.http: INFO
+logger.org.elasticsearch.xpack.security: INFO
+logger.org.elasticsearch.xpack.security.audit: INFO
+
+# Root logger configuration
+rootLogger.level: INFO
+
+# ==============================================================================
+# ADVANCED SETTINGS FOR FINANCIAL SERVICES
+# ==============================================================================
+
+# Action settings for bulk operations (financial transaction processing)
+action.auto_create_index: true
+action.destructive_requires_name: true
+
+# Cross-cluster replication for disaster recovery
+xpack.ccr.enabled: true
+
+# SQL feature for financial reporting and analytics
+xpack.sql.enabled: true
+
+# Graph exploration for fraud detection and compliance analysis
+xpack.graph.enabled: true
+
+# Data frame transforms for financial analytics
+xpack.transform.enabled: true
+
+# ==============================================================================
+# CLUSTER HEALTH AND RESILIENCE
+# ==============================================================================
+
+# Cluster allocation settings for high availability
+cluster.routing.allocation.enable: all
+cluster.routing.allocation.allow_rebalance: indices_all_active
+cluster.routing.allocation.cluster_concurrent_rebalance: 2
+cluster.routing.allocation.node_initial_primaries_recoveries: 4
+cluster.routing.allocation.node_concurrent_recoveries: 2
+cluster.routing.allocation.same_shard.host: false
+
+# Disk watermark settings for financial data retention
+cluster.routing.allocation.disk.watermark.low: 85%
+cluster.routing.allocation.disk.watermark.high: 90%
+cluster.routing.allocation.disk.watermark.flood_stage: 95%
+cluster.info.update.interval: 30s
+
+# ==============================================================================
+# HTTP CLIENT SETTINGS
+# ==============================================================================
+
+# HTTP client configuration for external integrations
+http.client.timeout: 60s
+http.client.compression: true
+
+# ==============================================================================
+# TRANSPORT SETTINGS
+# ==============================================================================
+
+# Transport layer configuration for secure inter-node communication
+transport.tcp.compress: true
+transport.ping_schedule: 5s
+transport.connect_timeout: 30s
+transport.tcp.keep_alive: true
+
+# ==============================================================================
+# END OF CONFIGURATION
+# ==============================================================================
