@@ -1,0 +1,326 @@
+# ===================================================================
+# Customer Service - Development Environment Configuration
+# ===================================================================
+# This configuration file provides development-specific settings for the
+# Customer Service microservice as part of the Unified Financial Services Platform.
+# 
+# Requirements Addressed:
+# - F-001: Unified Data Integration Platform - Database connectivity and service discovery
+# - F-004: Digital Customer Onboarding - Development environment support for onboarding workflows
+#
+# Technology Stack Alignment:
+# - Spring Boot 3.2+ with Java 21 LTS
+# - PostgreSQL 16+ as primary database
+# - Spring Cloud 2023.0+ for configuration management
+# - Eureka for service discovery
+# ===================================================================
+
+# ===================================================================
+# Spring Boot Core Configuration
+# ===================================================================
+spring:
+  # Application identification for service discovery and monitoring
+  application:
+    name: customer-service
+  
+  # Configuration server integration (optional for development)
+  # Enables centralized configuration management through Spring Cloud Config
+  config:
+    import: optional:configserver:http://localhost:8888
+  
+  # ===================================================================
+  # Database Configuration - PostgreSQL
+  # ===================================================================
+  # Primary database configuration for customer profiles and transactional data
+  # Supports F-001 requirement for unified data integration
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_customer_dev
+    username: dev_user
+    password: dev_password
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration
+    # Optimized based on PostgreSQL connection pool guidelines
+    hikari:
+      # Connection pool sizing for development environment
+      minimum-idle: 5
+      maximum-pool-size: 20
+      # Connection timeout settings
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      # Connection validation
+      validation-timeout: 5000
+      connection-test-query: SELECT 1
+      # Pool name for monitoring and debugging
+      pool-name: CustomerServiceCP-Dev
+      # Auto-commit setting for transactional consistency
+      auto-commit: false
+      # Connection leak detection for development debugging
+      leak-detection-threshold: 60000
+  
+  # ===================================================================
+  # JPA/Hibernate Configuration
+  # ===================================================================
+  # ORM configuration optimized for development and debugging
+  jpa:
+    # Database platform configuration
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    database: postgresql
+    
+    # Hibernate-specific settings
+    hibernate:
+      # DDL management - auto-update for development convenience
+      ddl-auto: update
+      # Naming strategy for database objects
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    
+    # SQL logging and formatting for development debugging
+    show-sql: true
+    
+    # Additional JPA properties
+    properties:
+      hibernate:
+        # PostgreSQL-specific dialect
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # SQL formatting for readability
+        format_sql: true
+        # SQL statement logging
+        use_sql_comments: true
+        # JDBC batch settings for performance
+        jdbc:
+          batch_size: 20
+          batch_versioned_data: true
+        # Connection provider settings
+        connection:
+          provider_disables_autocommit: true
+        # Query optimization settings
+        query:
+          in_clause_parameter_padding: true
+        # Generate statistics for monitoring
+        generate_statistics: false
+        # Development-friendly settings
+        enable_lazy_load_no_trans: false
+    
+    # Transaction management
+    open-in-view: false
+  
+  # ===================================================================
+  # Transaction Management Configuration
+  # ===================================================================
+  transaction:
+    default-timeout: 30
+    rollback-on-commit-failure: true
+
+# ===================================================================
+# Server Configuration
+# ===================================================================
+# HTTP server settings for the customer service
+server:
+  port: 8081
+  
+  # Connection and timeout settings
+  tomcat:
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+    accept-count: 100
+    max-http-form-post-size: 2MB
+  
+  # Compression settings for better performance
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 1024
+  
+  # Error handling configuration
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+
+# ===================================================================
+# Service Discovery Configuration - Eureka Client
+# ===================================================================
+# Integration with service discovery for microservices communication
+# Supports F-001 requirement for unified platform integration
+eureka:
+  client:
+    # Service registry URL
+    service-url:
+      defaultZone: http://localhost:8761/eureka
+    
+    # Client configuration
+    enabled: true
+    fetch-registry: true
+    register-with-eureka: true
+    
+    # Health check and heartbeat settings
+    healthcheck:
+      enabled: true
+    
+    # Registry fetch interval
+    registry-fetch-interval-seconds: 30
+    
+    # Instance lease settings
+    lease:
+      duration: 30
+      renewal-interval: 10
+  
+  # Instance configuration
+  instance:
+    # Instance identification
+    instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}
+    hostname: localhost
+    
+    # Health check URL
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    
+    # Lease settings
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    
+    # Metadata for service discovery
+    metadata-map:
+      version: 1.0.0
+      environment: development
+      service-type: customer-service
+
+# ===================================================================
+# Management and Monitoring Configuration
+# ===================================================================
+# Actuator endpoints for health checks and monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+  
+  # Health check configuration
+  health:
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+    
+  # Application information
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# ===================================================================
+# Logging Configuration
+# ===================================================================
+# Comprehensive logging setup for development debugging and monitoring
+logging:
+  level:
+    # Application-specific logging
+    com.ufs.customer: DEBUG
+    
+    # Spring framework logging
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.cloud: INFO
+    org.springframework.boot: INFO
+    
+    # Database and transaction logging
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.transaction: DEBUG
+    org.springframework.orm.jpa: DEBUG
+    
+    # Connection pool logging
+    com.zaxxer.hikari: DEBUG
+    
+    # Service discovery logging
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    
+    # General framework logging
+    org.apache.kafka: INFO
+    org.springframework.kafka: INFO
+    
+    # Root logger
+    root: INFO
+  
+  # Log output configuration
+  pattern:
+    console: "%clr(%d{ISO8601}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+    file: "%d{ISO8601} %5p ${PID:- } --- [%t] %-40.40logger{39} : %m%n%wEx"
+  
+  # Log file configuration for development
+  file:
+    name: logs/customer-service-dev.log
+    max-size: 100MB
+    max-history: 7
+
+# ===================================================================
+# Custom Application Properties
+# ===================================================================
+# Application-specific configuration for customer service functionality
+app:
+  # Customer service specific settings
+  customer:
+    # Digital onboarding configuration (F-004 support)
+    onboarding:
+      max-verification-attempts: 3
+      document-retention-days: 90
+      verification-timeout-minutes: 30
+    
+    # Data integration settings (F-001 support)
+    data-integration:
+      sync-interval-seconds: 30
+      batch-size: 100
+      retry-attempts: 3
+      timeout-seconds: 60
+    
+    # Security settings for customer data
+    security:
+      encryption-enabled: true
+      data-masking-enabled: true
+      audit-logging-enabled: true
+  
+  # Development environment specific settings
+  development:
+    # Enable additional debugging features
+    debug-mode: true
+    mock-external-services: true
+    test-data-enabled: true
+    
+    # Performance settings for development
+    cache-enabled: false
+    async-processing-enabled: true
+
+# ===================================================================
+# Security Configuration
+# ===================================================================
+# Basic security settings for development environment
+security:
+  # CORS configuration for development
+  cors:
+    allowed-origins: http://localhost:3000,http://localhost:4200
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600

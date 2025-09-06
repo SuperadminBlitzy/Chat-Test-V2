@@ -1,0 +1,589 @@
+# ==============================================================================
+# UFS COMPLIANCE SERVICE - PRODUCTION CONFIGURATION
+# Production Environment Overrides for Regulatory Compliance Automation (F-003)
+# ==============================================================================
+
+# Production Profile Activation
+spring:
+  config:
+    activate:
+      on-profile: prod
+  
+  # Production Database Configuration - PostgreSQL
+  # Overrides default localhost configuration with production-grade settings
+  datasource:
+    # Production PostgreSQL connection with enhanced security
+    url: jdbc:postgresql://prod-postgres:5432/compliance_db?useSSL=true&sslmode=require&serverTimezone=UTC&reWriteBatchedInserts=true&prepStmtCacheSize=512&prepStmtCacheSqlLimit=2048&connectTimeout=30&socketTimeout=60&tcpKeepAlive=true
+    username: prod_compliance_user
+    password: ${DB_PASSWORD_COMPLIANCE}
+    driver-class-name: org.postgresql.Driver
+    
+    # Production Connection Pool Configuration - Based on PostgreSQL specs
+    hikari:
+      pool-name: ComplianceProdHikariPool
+      # Production pool sizing based on technical specifications
+      minimum-idle: 20
+      maximum-pool-size: 30
+      # Enhanced timeout settings for production reliability
+      idle-timeout: 600000
+      max-lifetime: 3600000
+      connection-timeout: 30000
+      validation-timeout: 10000
+      leak-detection-threshold: 120000
+      connection-test-query: SELECT 1
+      # Production-optimized connection properties
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 512
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+        # Production SSL and security settings
+        sslMode: require
+        sslCert: /etc/ssl/certs/client-cert.pem
+        sslKey: /etc/ssl/private/client-key.pem
+        sslRootCert: /etc/ssl/certs/ca-cert.pem
+  
+  # Production JPA/Hibernate Configuration
+  jpa:
+    hibernate:
+      # Production setting - validate schema only, no automatic updates
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    # Disable SQL logging in production for performance and security
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Production performance optimizations
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+        # Enable statistics for production monitoring
+        generate_statistics: true
+        # Production cache configuration
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        # Connection optimizations for production
+        connection:
+          provider_disables_autocommit: true
+        # Batch processing optimizations
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
+        # Production format settings
+        format_sql: false
+        use_sql_comments: false
+  
+  # Production Kafka Configuration - Multi-broker setup
+  kafka:
+    # Production Kafka cluster with multiple brokers for high availability
+    bootstrap-servers: prod-kafka-broker1:9092,prod-kafka-broker2:9092,prod-kafka-broker3:9092
+    
+    # Production Producer Configuration
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # Production reliability settings
+      acks: all
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      enable-idempotence: true
+      # Production batch settings for performance
+      batch-size: 32768
+      linger-ms: 10
+      buffer-memory: 67108864
+      # Production compression
+      compression-type: lz4
+      # Production transaction settings
+      transaction-id-prefix: compliance-service-prod-
+      # Production retry configuration
+      retry-backoff-ms: 100
+      request-timeout-ms: 30000
+      delivery-timeout-ms: 120000
+      # Production SSL settings (configure when SSL is enabled)
+      properties:
+        security.protocol: PLAINTEXT
+        # ssl.truststore.location: /etc/kafka/ssl/kafka.client.truststore.jks
+        # ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
+        # ssl.keystore.location: /etc/kafka/ssl/kafka.client.keystore.jks
+        # ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD}
+    
+    # Production Consumer Configuration
+    consumer:
+      # Production consumer group
+      group-id: compliance-group-prod
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Production reliability settings
+      enable-auto-commit: false
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 3000
+      max-poll-records: 1000
+      max-poll-interval-ms: 300000
+      fetch-min-bytes: 1024
+      fetch-max-wait-ms: 500
+      # Production consumer group management
+      partition-assignment-strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+      # Production isolation level
+      isolation-level: read_committed
+      # Production trusted packages for security
+      properties:
+        spring.json.trusted.packages: "com.ufs.compliance.event,com.ufs.common.event,com.ufs.regulatory.event"
+        spring.json.type.mapping: "regulatory-update:com.ufs.compliance.event.RegulatoryUpdateEvent,policy-change:com.ufs.compliance.event.PolicyChangeEvent,audit-event:com.ufs.compliance.event.AuditEvent"
+        # Production security settings
+        security.protocol: PLAINTEXT
+        # ssl.truststore.location: /etc/kafka/ssl/kafka.client.truststore.jks
+        # ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
+    
+    # Production Admin Configuration
+    admin:
+      properties:
+        bootstrap.servers: prod-kafka-broker1:9092,prod-kafka-broker2:9092,prod-kafka-broker3:9092
+        request.timeout.ms: 30000
+        security.protocol: PLAINTEXT
+  
+  # Production Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Production OAuth2 JWT issuer configuration
+          issuer-uri: http://auth-service:9000
+          # Production JWK Set URI for token validation
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+          # Production JWT validation settings
+          cache-duration: PT5M
+          # Production audience validation
+          audiences: ufs-compliance-service
+  
+  # Production Redis Configuration (if used for caching)
+  redis:
+    host: prod-redis-cluster
+    port: 6379
+    password: ${REDIS_PASSWORD_PROD}
+    database: 1
+    timeout: 3000ms
+    # Production connection pool
+    lettuce:
+      pool:
+        max-active: 16
+        max-idle: 8
+        min-idle: 2
+        max-wait: 1000ms
+    # Production cluster configuration
+    cluster:
+      max-redirects: 3
+      nodes: prod-redis-node1:6379,prod-redis-node2:6379,prod-redis-node3:6379
+    # Production SSL configuration
+    ssl: true
+
+# Production Service Discovery Configuration
+eureka:
+  client:
+    # Production Eureka server configuration
+    serviceUrl:
+      defaultZone: http://discovery-service:8761/eureka/
+    # Production registration settings
+    register-with-eureka: true
+    fetch-registry: true
+    # Production performance optimizations
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+    # Production health check configuration
+    heartbeat-executor-thread-pool-size: 2
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 2
+    cache-refresh-executor-exponential-back-off-bound: 10
+    # Production security settings
+    disable-delta: false
+    # Production zone configuration
+    availability-zones:
+      us-east-1: us-east-1a,us-east-1b,us-east-1c
+    region: us-east-1
+  
+  instance:
+    # Production instance configuration
+    prefer-ip-address: true
+    # Production hostname and IP configuration
+    hostname: ${HOSTNAME:compliance-service-prod}
+    ip-address: ${POD_IP:}
+    # Production health check configuration
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Production lease configuration for faster failover
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    # Production instance metadata
+    metadata-map:
+      management.context-path: /actuator
+      health.path: /actuator/health
+      configPath: /actuator/env
+      service-type: compliance
+      version: ${BUILD_VERSION:1.0.0}
+      zone: ${DATACENTER_ZONE:us-east-1a}
+      environment: production
+      instance-id: ${spring.application.name}:${HOSTNAME:unknown}:${server.port}
+
+# Production Logging Configuration
+logging:
+  # Production log levels - INFO level for security and performance
+  level:
+    root: INFO
+    # Application logging - INFO level for production
+    com.ufs.compliance: INFO
+    com.ufs.common: INFO
+    # Framework logging - WARN level to reduce noise
+    org.springframework.web: WARN
+    org.springframework.security: WARN
+    org.springframework.kafka: WARN
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    # Third-party libraries - WARN level
+    com.zaxxer.hikari: WARN
+    org.apache.kafka: WARN
+    redis.clients.jedis: WARN
+    # Eureka logging - WARN level
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+    # Security logging - INFO level for audit
+    org.springframework.security.oauth2: INFO
+    org.springframework.security.web: INFO
+  
+  # Production logging pattern
+  pattern:
+    # Production console pattern with correlation ID
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-}] [%X{userId:-}] %logger{36} - %msg%n"
+    # Production file pattern with additional context
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%X{traceId:-}] [%X{spanId:-}] [%thread] %-5level [%X{correlationId:-}] [%X{userId:-}] %logger{36} - %msg%n"
+  
+  # Production file logging configuration
+  file:
+    name: /var/log/ufs/compliance-service.log
+    max-size: 500MB
+    max-history: 60
+    total-size-cap: 10GB
+    # Production file archiving
+    pattern: /var/log/ufs/compliance-service.%d{yyyy-MM-dd}.%i.log.gz
+  
+  # Production logback configuration
+  config: classpath:logback-prod.xml
+
+# Production Server Configuration
+server:
+  # Production server port
+  port: 8084
+  # Production servlet configuration
+  servlet:
+    context-path: /api/v1/compliance
+  # Production connection settings
+  tomcat:
+    connection-timeout: 30000
+    max-connections: 10000
+    threads:
+      max: 300
+      min-spare: 50
+    # Production connection pool settings
+    max-http-post-size: 10485760
+    accept-count: 200
+    max-keep-alive-requests: 1000
+    keep-alive-timeout: 30000
+  # Production graceful shutdown
+  shutdown: graceful
+  # Production SSL configuration
+  ssl:
+    enabled: true
+    key-store: /etc/ssl/keystore/compliance-service.p12
+    key-store-password: ${SSL_KEYSTORE_PASSWORD}
+    key-store-type: PKCS12
+    key-alias: compliance-service
+    # Production SSL protocols and ciphers
+    enabled-protocols: TLSv1.2,TLSv1.3
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256
+
+# Production Management and Monitoring Configuration
+management:
+  # Production actuator endpoints
+  endpoints:
+    web:
+      # Expose only necessary endpoints for production
+      exposure:
+        include: health,info,prometheus
+      # Production base path
+      base-path: /actuator
+      # Production CORS configuration
+      cors:
+        allowed-origins: https://monitoring.ufs.internal,https://grafana.ufs.internal
+        allowed-methods: GET,POST
+        allowed-headers: "*"
+        allow-credentials: false
+        max-age: 3600
+  
+  # Production endpoint configurations
+  endpoint:
+    # Production health endpoint
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      # Production health indicators
+      group:
+        readiness:
+          include: db,kafka,redis,eureka
+        liveness:
+          include: ping,diskSpace
+      # Production health checks
+      db:
+        enabled: true
+      kafka:
+        enabled: true
+      redis:
+        enabled: true
+    # Production info endpoint
+    info:
+      enabled: true
+      # Production info contributors
+      java:
+        enabled: true
+      os:
+        enabled: true
+      build:
+        enabled: true
+    # Production metrics endpoint
+    metrics:
+      enabled: true
+      export:
+        prometheus:
+          enabled: true
+          step: 30s
+          descriptions: true
+          # Production Prometheus configuration
+          pushgateway:
+            enabled: false
+    # Production environment endpoint - restricted
+    env:
+      enabled: true
+      show-values: never
+    # Disable sensitive endpoints in production
+    configprops:
+      enabled: false
+    beans:
+      enabled: false
+    mappings:
+      enabled: false
+    threaddump:
+      enabled: false
+    heapdump:
+      enabled: false
+    loggers:
+      enabled: true
+    caches:
+      enabled: true
+    scheduledtasks:
+      enabled: true
+  
+  # Production metrics configuration
+  metrics:
+    enable:
+      # Enable key metrics for production monitoring
+      jvm: true
+      system: true
+      http: true
+      hikaricp: true
+      cache: true
+      kafka.consumer: true
+      kafka.producer: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.kafka.consumer: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+        spring.kafka.consumer: 0.5,0.9,0.95,0.99
+    # Production metric tags
+    tags:
+      application: ${spring.application.name}
+      environment: production
+      region: ${AWS_REGION:us-east-1}
+      instance: ${HOSTNAME:unknown}
+      zone: ${DATACENTER_ZONE:us-east-1a}
+      version: ${BUILD_VERSION:1.0.0}
+  
+  # Production JMX configuration
+  jmx:
+    exposure:
+      include: health,info,metrics
+  
+  # Production tracing configuration
+  tracing:
+    sampling:
+      probability: 0.1
+
+# Production Application-Specific Configuration
+app:
+  # Production external regulatory API configuration
+  external-regulatory-api:
+    url: https://api.regulatory-data-provider.com/v1
+    api-key: ${REGULATORY_API_KEY}
+    # Production connection settings
+    connect-timeout: 30000
+    read-timeout: 60000
+    # Production retry configuration
+    max-retries: 3
+    retry-delay: 1000
+    # Production rate limiting
+    rate-limit: 1000
+    # Production SSL verification
+    ssl-verification: true
+  
+  # Production compliance configuration
+  compliance:
+    # Production regulatory update processing
+    regulatory:
+      update-frequency: 300000 # 5 minutes
+      batch-size: 200
+      max-retry-attempts: 3
+      # Production data retention (7 years for compliance)
+      data-retention-days: 2555
+      # Production processing threads
+      processor-threads: 10
+    
+    # Production audit configuration
+    audit:
+      enabled: true
+      async: true
+      batch-size: 100
+      flush-interval: 15000 # 15 seconds
+      # Production audit storage
+      storage-path: /var/lib/compliance/audit
+    
+    # Production report generation
+    reports:
+      generation-timeout: 600000 # 10 minutes
+      max-concurrent-reports: 10
+      storage-path: /var/lib/compliance/reports
+      # Production report retention
+      retention-days: 90
+    
+    # Production threshold settings
+    thresholds:
+      risk-score-alert: 80
+      transaction-amount-review: 10000
+      suspicious-activity-score: 75
+  
+  # Production cache configuration
+  cache:
+    default-ttl: 3600 # 1 hour
+    regulatory-rules-ttl: 1800 # 30 minutes
+    customer-profile-ttl: 900 # 15 minutes
+    max-entries: 50000
+    # Production cache eviction policy
+    eviction-policy: LRU
+  
+  # Production circuit breaker configuration
+  circuit-breaker:
+    failure-rate-threshold: 60
+    wait-duration-in-open-state: 60000
+    sliding-window-size: 20
+    minimum-number-of-calls: 10
+    # Production circuit breaker monitoring
+    record-exceptions: java.net.ConnectException,java.net.SocketTimeoutException
+  
+  # Production retry configuration
+  retry:
+    max-attempts: 3
+    backoff-delay: 2000
+    max-delay: 30000
+    # Production retry on specific exceptions
+    retry-exceptions: java.net.ConnectException,java.net.SocketTimeoutException
+  
+  # Production rate limiting configuration
+  rate-limit:
+    enabled: true
+    requests-per-minute: 5000
+    burst-capacity: 500
+    # Production rate limit by IP
+    per-ip-limit: 100
+
+# Production Security Configuration
+security:
+  # Production JWT configuration
+  jwt:
+    # Production JWT settings
+    secret: ${JWT_SECRET}
+    issuer: ufs-auth-service-prod
+    expiration-ms: 3600000 # 1 hour
+    refresh-expiration-ms: 86400000 # 24 hours
+    algorithm: RS256
+    audience: ufs-compliance-service
+  
+  # Production CORS configuration
+  cors:
+    allowed-origins: https://app.ufs.com,https://admin.ufs.com
+    allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+    allowed-headers: Authorization,Content-Type,X-Requested-With,X-Correlation-ID
+    allow-credentials: true
+    max-age: 3600
+
+# Production Monitoring and Alerting Configuration
+monitoring:
+  # Production health check configuration
+  health:
+    db-timeout: 10000
+    kafka-timeout: 5000
+    redis-timeout: 3000
+    # Production health check intervals
+    check-interval: 30000
+  
+  # Production alerting thresholds
+  alerts:
+    cpu-threshold: 80
+    memory-threshold: 85
+    disk-threshold: 90
+    response-time-threshold: 2000
+    error-rate-threshold: 5
+    # Production alerting endpoints
+    webhook-url: ${ALERT_WEBHOOK_URL}
+    
+# Production Thread Pool Configuration
+async:
+  core-pool-size: 20
+  max-pool-size: 100
+  queue-capacity: 2000
+  thread-name-prefix: ComplianceProdAsync-
+  keep-alive-seconds: 300
+  # Production thread pool monitoring
+  allow-core-thread-timeout: true
+
+# Production Validation Configuration
+validation:
+  enabled: true
+  fail-fast: false # Continue processing in production
+  messages:
+    source: classpath:validation-messages.properties
+
+# Production Internationalization Configuration
+message:
+  source:
+    basename: messages,compliance-messages
+    encoding: UTF-8
+    cache-duration: 3600
+    use-code-as-default-message: false # Fail with proper error messages
+
+# Production Debug Configuration
+debug:
+  enabled: false
+  include-stacktrace: never
+  log-request-details: false

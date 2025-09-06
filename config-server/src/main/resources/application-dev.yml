@@ -1,0 +1,396 @@
+# =============================================================================
+# Spring Cloud Config Server - Development Environment Configuration
+# =============================================================================
+# This configuration file provides centralized configuration management for all
+# microservices in the financial services platform. It supports the F-001
+# Unified Data Integration Platform requirement for centralized configuration.
+# =============================================================================
+
+# Application Identity and Basic Configuration
+spring:
+  application:
+    # Service name for registration with Eureka discovery service
+    name: config-server
+  
+  # Profile-specific configuration for development environment
+  profiles:
+    active: dev
+  
+  # Spring Cloud Config Server Configuration
+  cloud:
+    config:
+      server:
+        # Git repository configuration for storing configuration files
+        git:
+          # Primary Git repository URI for configuration storage
+          uri: https://github.com/your-repo/config-repo
+          
+          # Default branch to use for configuration retrieval
+          default-label: main
+          
+          # Search paths for application configurations
+          # {application} placeholder will be replaced with service name
+          search-paths: '{application},common'
+          
+          # Clone repository on startup for faster access
+          clone-on-start: true
+          
+          # Force pull from remote repository on each request (dev only)
+          force-pull: true
+          
+          # Timeout settings for Git operations
+          timeout: 10
+          
+          # Skip SSL certificate verification for development (DO NOT use in production)
+          skip-ssl-validation: true
+          
+          # Repository refresh rate in seconds
+          refresh-rate: 60
+          
+          # Authentication configuration (if repository is private)
+          username: ${GIT_USERNAME:#{null}}
+          password: ${GIT_PASSWORD:#{null}}
+        
+        # Enable native profile support for local file system configurations
+        native:
+          search-locations: classpath:/config/,file:./config/
+        
+        # Health indicator configuration
+        health:
+          repositories:
+            # Enable health checks for Git repositories
+            enabled: true
+        
+        # Encryption configuration for sensitive properties
+        encrypt:
+          enabled: false  # Disabled for development, enable for production
+  
+  # Security Configuration
+  security:
+    # Basic authentication for development (use OAuth2 for production)
+    user:
+      name: ${CONFIG_SERVER_USERNAME:config-user}
+      password: ${CONFIG_SERVER_PASSWORD:config-pass}
+      roles: ADMIN,USER
+  
+  # JPA and Database Configuration
+  jpa:
+    # Hibernate configuration
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    
+    # Show SQL statements in development
+    show-sql: true
+    
+    # Database platform
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    
+    # Properties for Hibernate
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 20
+          batch_versioned_data: true
+        order_inserts: true
+        order_updates: true
+  
+  # PostgreSQL Database Configuration
+  datasource:
+    # Primary database connection
+    url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:configserver_dev}
+    username: ${DB_USERNAME:config_user}
+    password: ${DB_PASSWORD:config_pass}
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration (enterprise-grade)
+    hikari:
+      # Connection pool size based on tech spec recommendations
+      minimum-idle: 5
+      maximum-pool-size: 20
+      max-lifetime: 1800000  # 30 minutes
+      connection-timeout: 30000  # 30 seconds
+      idle-timeout: 600000  # 10 minutes
+      leak-detection-threshold: 60000  # 1 minute
+      
+      # Connection validation
+      connection-test-query: SELECT 1
+      validation-timeout: 5000
+      
+      # Pool name for monitoring
+      pool-name: ConfigServerConnectionPool-Dev
+  
+  # Redis Configuration for Caching (as per tech stack Redis 7.2+)
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:#{null}}
+      database: 0
+      timeout: 2000ms
+      
+      # Connection pool configuration
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 8
+          min-idle: 0
+          max-wait: -1ms
+  
+  # Jackson JSON Configuration
+  jackson:
+    serialization:
+      indent-output: true
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+
+# Server Configuration
+server:
+  # Server port configuration
+  port: ${SERVER_PORT:8888}
+  
+  # Servlet context path
+  servlet:
+    context-path: /config
+  
+  # Compression configuration for better performance
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
+  
+  # HTTP/2 support
+  http2:
+    enabled: true
+  
+  # Error handling configuration
+  error:
+    include-stacktrace: on_param  # Include stack trace only when requested (dev mode)
+    include-message: always
+    include-binding-errors: always
+
+# Eureka Client Configuration for Service Discovery
+eureka:
+  client:
+    # Enable Eureka client
+    enabled: true
+    
+    # Eureka server configuration
+    serviceUrl:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    
+    # Fetch registry from Eureka server
+    fetch-registry: true
+    
+    # Register this service with Eureka
+    register-with-eureka: true
+    
+    # Health check configuration
+    healthcheck:
+      enabled: true
+    
+    # Registry fetch interval
+    registry-fetch-interval-seconds: 30
+    
+    # Instance info replication interval
+    instance-info-replication-interval-seconds: 30
+  
+  instance:
+    # Instance configuration
+    prefer-ip-address: true
+    
+    # Health check URL
+    health-check-url-path: /config/actuator/health
+    status-page-url-path: /config/actuator/info
+    
+    # Lease configuration
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    
+    # Instance metadata
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      environment: development
+      config-server: true
+
+# Management and Monitoring Configuration (Actuator)
+management:
+  # Actuator endpoints configuration
+  endpoints:
+    web:
+      exposure:
+        # Expose comprehensive endpoints for development monitoring
+        include: health,info,metrics,prometheus,env,configprops,beans,refresh,bus-refresh
+      base-path: /actuator
+  
+  # Health endpoint configuration
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    
+    # Prometheus metrics endpoint
+    prometheus:
+      enabled: true
+    
+    # Environment endpoint
+    env:
+      show-values: always  # Development only - hide in production
+    
+    # Configuration properties endpoint
+    configprops:
+      show-values: always  # Development only - hide in production
+  
+  # Health indicators
+  health:
+    # Database health check
+    db:
+      enabled: true
+    
+    # Disk space health check
+    diskspace:
+      enabled: true
+      threshold: 10737418240  # 10GB threshold
+    
+    # Redis health check
+    redis:
+      enabled: true
+    
+    # Git repository health check
+    config:
+      enabled: true
+  
+  # Metrics configuration
+  metrics:
+    # Enable JVM metrics
+    enable:
+      jvm: true
+      system: true
+      web: true
+      
+    # Micrometer configuration for Prometheus
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+    
+    # Distribution configuration
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+      sla:
+        http.server.requests: 100ms,200ms,500ms,1s,2s,5s
+  
+  # JMX configuration
+  jmx:
+    enabled: true
+
+# Logging Configuration
+logging:
+  # Log levels
+  level:
+    root: INFO
+    org.springframework.cloud.config: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    com.zaxxer.hikari: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    
+    # Application-specific logging
+    com.fintech.configserver: DEBUG
+  
+  # Log pattern configuration
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+  
+  # Log file configuration
+  file:
+    name: logs/config-server-dev.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# Custom Application Configuration
+app:
+  # Configuration refresh settings
+  config:
+    refresh:
+      enabled: true
+      rate: 60  # seconds
+  
+  # Security settings for development
+  security:
+    cors:
+      enabled: true
+      allowed-origins: http://localhost:3000,http://localhost:8080
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+    
+    # JWT configuration (if using JWT tokens)
+    jwt:
+      secret: ${JWT_SECRET:dev-secret-key-change-in-production}
+      expiration: 86400  # 24 hours in seconds
+  
+  # Feature flags for development
+  features:
+    encryption: false  # Disabled for development
+    audit-logging: true
+    metrics-collection: true
+    health-checks: true
+
+# External Service Configuration
+external:
+  services:
+    # Financial data providers configuration
+    market-data:
+      enabled: false  # Disabled for development
+      url: ${MARKET_DATA_URL:http://localhost:9090}
+      timeout: 5000
+    
+    # Regulatory services
+    compliance:
+      enabled: false  # Disabled for development
+      url: ${COMPLIANCE_SERVICE_URL:http://localhost:9091}
+      timeout: 10000
+
+# Development-specific Environment Variables Documentation
+# =====================================================
+# The following environment variables can be used to override default configurations:
+# 
+# Database Configuration:
+# - DB_HOST: PostgreSQL database host (default: localhost)
+# - DB_PORT: PostgreSQL database port (default: 5432)
+# - DB_NAME: Database name (default: configserver_dev)
+# - DB_USERNAME: Database username (default: config_user)
+# - DB_PASSWORD: Database password (default: config_pass)
+# 
+# Git Repository Configuration:
+# - GIT_USERNAME: Git repository username (optional)
+# - GIT_PASSWORD: Git repository password or token (optional)
+# 
+# Redis Configuration:
+# - REDIS_HOST: Redis server host (default: localhost)
+# - REDIS_PORT: Redis server port (default: 6379)
+# - REDIS_PASSWORD: Redis password (optional)
+# 
+# Service Discovery:
+# - EUREKA_SERVER_URL: Eureka server URL (default: http://localhost:8761/eureka/)
+# 
+# Server Configuration:
+# - SERVER_PORT: Server port (default: 8888)
+# 
+# Security Configuration:
+# - CONFIG_SERVER_USERNAME: Basic auth username (default: config-user)
+# - CONFIG_SERVER_PASSWORD: Basic auth password (default: config-pass)
+# - JWT_SECRET: JWT signing secret (default: dev-secret-key-change-in-production)

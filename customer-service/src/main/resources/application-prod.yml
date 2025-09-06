@@ -1,0 +1,558 @@
+# Production Configuration for Customer Service
+# Unified Financial Services Platform
+# Environment: Production
+# Service: customer-service
+# Version: 1.0.0
+
+spring:
+  # Application Identity Configuration
+  application:
+    name: customer-service
+  
+  # Spring Cloud Config Integration
+  config:
+    import: "optional:configserver:http://config-server:8888"
+  
+  # Production Database Configuration - PostgreSQL
+  datasource:
+    url: jdbc:postgresql://postgres-prod:5432/ufs-customer-db
+    username: prod_user
+    password: '{cipher}prod_password_encrypted'
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration (Production Optimized)
+    hikari:
+      pool-name: CustomerServiceHikariCP
+      maximum-pool-size: 20
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      auto-commit: false
+      
+    # Connection Pool Health and Monitoring
+    health:
+      enabled: true
+      validation-query: SELECT 1
+      validation-interval: 30000
+  
+  # JPA/Hibernate Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.CamelCaseToUnderscoresNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    show-sql: false
+    properties:
+      hibernate:
+        # Performance Optimization
+        jdbc:
+          batch_size: 25
+          batch_versioned_data: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        # Connection Pool Integration
+        connection:
+          provider_disables_autocommit: true
+        # Query Optimization
+        query:
+          plan_cache_max_size: 2048
+          plan_parameter_metadata_max_size: 128
+        # Statistics for Monitoring
+        generate_statistics: true
+        stats:
+          log_slow_queries: true
+        slow_query_threshold_millis: 1000
+  
+  # MongoDB Configuration for Customer Profiles
+  data:
+    mongodb:
+      uri: mongodb://prod_user:{cipher}prod_password_encrypted@mongodb-prod:27017/ufs-customer-profiles
+      # MongoDB Connection Pool Configuration
+      options:
+        max-pool-size: 100
+        min-pool-size: 10
+        max-idle-time: 300000
+        wait-queue-timeout: 10000
+        server-selection-timeout: 30000
+        connect-timeout: 10000
+        socket-timeout: 0
+        max-connection-life-time: 0
+        ssl-enabled: false
+        retry-writes: true
+        read-preference: secondaryPreferred
+        write-concern: majority
+        read-concern: majority
+  
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+          # JWT Validation Settings
+          cache-duration: PT5M
+          # Clock Skew for JWT validation
+          clock-skew: PT30S
+      client:
+        registration:
+          customer-service:
+            client-id: customer-service-client
+            client-secret: '{cipher}customer_service_client_secret_encrypted'
+            scope: read,write
+            authorization-grant-type: client_credentials
+        provider:
+          auth-service:
+            token-uri: http://auth-service:9000/oauth2/token
+            authorization-uri: http://auth-service:9000/oauth2/authorize
+  
+  # Redis Configuration for Caching and Session Management
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+  redis:
+    host: redis-cluster-prod
+    port: 6379
+    password: '{cipher}redis_password_encrypted'
+    database: 0
+    timeout: 2000ms
+    # Redis Connection Pool Configuration
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 20
+        min-idle: 5
+        max-wait: 2000ms
+        time-between-eviction-runs: 60000ms
+      cluster:
+        refresh:
+          adaptive: true
+          period: 30s
+  
+  # Kafka Configuration for Event Streaming
+  kafka:
+    bootstrap-servers: kafka-cluster-prod:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      buffer-memory: 33554432
+      compression-type: lz4
+      enable-idempotence: true
+      max-in-flight-requests-per-connection: 5
+    consumer:
+      group-id: customer-service-group
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+      max-poll-interval-ms: 300000
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 3000
+    # Security Configuration
+    security:
+      protocol: SASL_SSL
+    ssl:
+      trust-store-location: classpath:kafka-truststore.jks
+      trust-store-password: '{cipher}kafka_truststore_password_encrypted'
+    sasl:
+      mechanism: SCRAM-SHA-256
+      jaas:
+        config: org.apache.kafka.common.security.scram.ScramLoginModule required username="prod_user" password="{cipher}kafka_password_encrypted";
+
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://discovery-service:8761/eureka/
+    instance:
+      prefer-ip-address: true
+      lease-renewal-interval-in-seconds: 30
+      lease-expiration-duration-in-seconds: 90
+      # Health Check Configuration
+      health-check-url-path: /actuator/health
+      status-page-url-path: /actuator/info
+      # Metadata for Service Mesh
+      metadata-map:
+        management.port: 8081
+        version: ${info.app.version:1.0.0}
+        zone: production
+        instance-id: ${spring.application.name}:${random.value}
+    # Service Registry Configuration
+    registry-fetch-interval-seconds: 30
+    disable-delta: false
+    # Eureka Security
+    service-url:
+      defaultZone: http://eureka-user:${eureka.password:eureka-pass}@discovery-service:8761/eureka/
+  instance:
+    hostname: customer-service
+    # Kubernetes-specific configuration
+    prefer-ip-address: true
+    ip-address: ${HOSTNAME:customer-service}
+    instance-id: ${spring.application.name}:${HOSTNAME:customer-service}:${server.port:8081}
+
+# Server Configuration
+server:
+  port: 8081
+  # Production Server Optimization
+  undertow:
+    threads:
+      io: 16
+      worker: 256
+    buffer-size: 1024
+    direct-buffers: true
+  # Compression Configuration
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml
+    min-response-size: 1024
+  # SSL Configuration (when enabled)
+  ssl:
+    enabled: false
+    # Uncomment and configure for HTTPS
+    # key-store: classpath:keystore.p12
+    # key-store-password: '{cipher}keystore_password_encrypted'
+    # key-store-type: PKCS12
+    # protocol: TLS
+    # enabled-protocols: TLSv1.2,TLSv1.3
+
+# Production Logging Configuration
+logging:
+  level:
+    # Application Logging
+    com.ufs.customer: INFO
+    org.springframework.web: INFO
+    org.hibernate: ERROR
+    org.hibernate.SQL: ERROR
+    org.hibernate.type.descriptor.sql.BasicBinder: ERROR
+    # Security Logging
+    org.springframework.security: INFO
+    # Database Logging
+    org.springframework.data.mongodb: WARN
+    com.zaxxer.hikari: WARN
+    # Kafka Logging
+    org.apache.kafka: WARN
+    org.springframework.kafka: WARN
+    # Cache Logging
+    org.springframework.cache: WARN
+    # Circuit Breaker Logging
+    io.github.resilience4j: INFO
+  # Logback Configuration
+  config: classpath:logback-spring.xml
+  pattern:
+    # Structured logging for production
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: /var/log/customer-service/application.log
+    # Log rotation
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+
+# Actuator Configuration for Production Monitoring
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,beans,configprops,httptrace,loggers
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN,ACTUATOR
+      # Custom health indicators
+      group:
+        readiness:
+          include: readinessState,db,redis,kafka
+        liveness:
+          include: livenessState,ping
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    env:
+      show-values: when-authorized
+  # Security for Actuator Endpoints
+  security:
+    enabled: true
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+  # Health Check Configuration
+  health:
+    # Database Health Checks
+    db:
+      enabled: true
+    # Redis Health Check
+    redis:
+      enabled: true
+    # Kafka Health Check
+    kafka:
+      enabled: true
+    # Disk Space Health Check
+    diskspace:
+      enabled: true
+      threshold: 100MB
+    # Circuit Breaker Health Check
+    circuitbreakers:
+      enabled: true
+  # Metrics Configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+      simple:
+        enabled: false
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        jvm.memory.used: true
+        jvm.gc.pause: true
+      percentiles:
+        http.server.requests: 0.5,0.90,0.95,0.99
+      sla:
+        http.server.requests: 100ms,500ms,1s,2s,5s
+    tags:
+      application: ${spring.application.name}
+      environment: production
+      version: ${info.app.version:1.0.0}
+      region: ${REGION:us-east-1}
+
+# Application Information
+info:
+  app:
+    name: Customer Service
+    description: Production Customer Service for Unified Financial Services Platform
+    version: 1.0.0
+    build:
+      time: ${BUILD_TIME:@timestamp@}
+      version: ${BUILD_VERSION:@version@}
+      artifact: ${BUILD_ARTIFACT:customer-service}
+  environment:
+    name: production
+    region: ${REGION:us-east-1}
+    zone: ${ZONE:prod}
+
+# Circuit Breaker Configuration (Resilience4j)
+resilience4j:
+  circuitbreaker:
+    instances:
+      payment-service:
+        register-health-indicator: true
+        sliding-window-size: 100
+        sliding-window-type: COUNT_BASED
+        minimum-number-of-calls: 20
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30000
+        automatic-transition-from-open-to-half-open-enabled: true
+        permitted-number-of-calls-in-half-open-state: 10
+      risk-service:
+        register-health-indicator: true
+        sliding-window-size: 50
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 20000
+  retry:
+    instances:
+      external-api:
+        max-attempts: 3
+        wait-duration: 1000
+        retry-exceptions:
+          - java.net.ConnectException
+          - java.io.IOException
+  timelimiter:
+    instances:
+      default:
+        timeout-duration: 5s
+        cancel-running-future: true
+
+# Custom Application Configuration
+application:
+  # Customer Service Specific Configuration
+  customer:
+    # KYC Configuration
+    kyc:
+      verification-timeout: 300000
+      document-storage-path: /secure/documents
+      biometric-enabled: true
+      enhanced-due-diligence-threshold: 100000
+    # Risk Assessment Configuration
+    risk:
+      assessment-timeout: 10000
+      ai-model-endpoint: http://ai-risk-service:8080/assess
+      risk-score-cache-ttl: 300
+    # Compliance Configuration
+    compliance:
+      aml-screening-enabled: true
+      sanctions-check-enabled: true
+      pep-screening-enabled: true
+      regulatory-reporting-enabled: true
+  # API Configuration
+  api:
+    rate-limiting:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 100
+    # CORS Configuration
+    cors:
+      allowed-origins: 
+        - https://app.ufs-platform.com
+        - https://admin.ufs-platform.com
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      exposed-headers: X-Request-ID,X-Response-Time
+      allow-credentials: true
+      max-age: 3600
+  # Feature Flags
+  features:
+    enhanced-kyc: true
+    real-time-risk-scoring: true
+    blockchain-integration: true
+    ai-powered-insights: true
+    mobile-biometric-auth: true
+  # Integration Configuration
+  integrations:
+    # External Credit Bureau Integration
+    credit-bureau:
+      enabled: true
+      timeout: 5000
+      retry-attempts: 3
+      circuit-breaker-enabled: true
+    # Blockchain Integration
+    blockchain:
+      enabled: true
+      network: hyperledger-fabric
+      channel: customer-channel
+      chaincode: customer-contract
+    # AI/ML Service Integration
+    ai-services:
+      fraud-detection:
+        enabled: true
+        endpoint: http://fraud-detection-service:8080
+        timeout: 2000
+      sentiment-analysis:
+        enabled: true
+        endpoint: http://sentiment-service:8080
+        timeout: 3000
+
+# OpenAPI Documentation Configuration
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    display-request-duration: true
+    groups-order: DESC
+    operations-sorter: method
+    disable-swagger-default-url: true
+    use-root-path: true
+  # Security Configuration for API Documentation
+  show-actuator: false
+  # API Grouping
+  group-configs:
+    - group: customer-api
+      display-name: Customer Management API
+      paths-to-match: /api/v1/customers/**
+    - group: account-api
+      display-name: Account Management API  
+      paths-to-match: /api/v1/accounts/**
+    - group: compliance-api
+      display-name: Compliance API
+      paths-to-match: /api/v1/compliance/**
+
+# Distributed Tracing Configuration
+spring.sleuth:
+  enabled: true
+  sampler:
+    probability: 1.0
+    rate: 10
+  zipkin:
+    base-url: http://zipkin-service:9411
+    enabled: true
+  jaeger:
+    enabled: true
+    endpoint: http://jaeger-collector:14268/api/traces
+  # Custom Trace Configuration
+  trace-id128: true
+  supports-join: true
+  web:
+    skip-pattern: /actuator.*|/health.*|/info.*|/metrics.*
+  # Baggage Configuration
+  baggage:
+    correlation-enabled: true
+    correlation-fields: user-id,session-id,tenant-id
+    remote-fields: user-id,session-id
+
+# Custom Validation Configuration
+validation:
+  # Customer Data Validation
+  customer:
+    min-age: 18
+    max-age: 120
+    required-documents: 2
+    # PII Validation
+    pii:
+      ssn-validation: true
+      phone-format: E164
+      email-domain-validation: true
+  # Financial Data Validation
+  financial:
+    max-transaction-amount: 1000000
+    currency-codes: USD,EUR,GBP,JPY,CAD,AUD
+    account-number-validation: true
+
+# Internationalization Configuration
+spring.messages:
+  basename: messages,validation
+  encoding: UTF-8
+  cache-duration: 3600
+  fallback-to-system-locale: false
+  always-use-message-format: false
+
+# Custom Configuration for Financial Services
+financial-services:
+  # Regulatory Configuration
+  regulations:
+    gdpr-enabled: true
+    ccpa-enabled: true
+    pci-dss-enabled: true
+    sox-compliance: true
+  # Audit Configuration
+  audit:
+    enabled: true
+    async: true
+    retention-days: 2555  # 7 years
+    include-request-body: true
+    include-response-body: false
+    sensitive-data-masking: true
+  # Data Retention Policies
+  data-retention:
+    customer-profiles: 2555  # 7 years
+    transaction-records: 2555  # 7 years
+    audit-logs: 3650  # 10 years
+    session-data: 30  # 30 days

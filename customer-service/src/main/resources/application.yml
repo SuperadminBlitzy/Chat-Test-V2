@@ -1,0 +1,543 @@
+# Customer Service Application Configuration
+# This configuration supports the Unified Data Integration Platform (F-001) and Digital Customer Onboarding (F-004)
+# Complies with financial services security and regulatory requirements
+
+spring:
+  application:
+    name: customer-service
+  
+  # External configuration server integration for centralized config management
+  config:
+    import: optional:configserver:http://config-server:8888
+  
+  # Active profile configuration - dynamically set during build
+  profiles:
+    active: '@spring.profiles.active@'
+  
+  # Database Configuration
+  datasource:
+    # Primary PostgreSQL database for customer profiles and transactional data
+    primary:
+      url: jdbc:postgresql://postgres-primary:5432/customer_db
+      username: ${DB_USERNAME:customer_service}
+      password: ${DB_PASSWORD:}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        pool-name: CustomerServiceCP
+        maximum-pool-size: 20
+        minimum-idle: 5
+        idle-timeout: 300000
+        max-lifetime: 1800000
+        connection-timeout: 20000
+        leak-detection-threshold: 60000
+        validation-timeout: 5000
+    
+    # Read replica for reporting and analytics
+    replica:
+      url: jdbc:postgresql://postgres-replica:5432/customer_db
+      username: ${DB_REPLICA_USERNAME:customer_service_read}
+      password: ${DB_REPLICA_PASSWORD:}
+      driver-class-name: org.postgresql.Driver
+      hikari:
+        pool-name: CustomerServiceReadCP
+        maximum-pool-size: 15
+        minimum-idle: 3
+        idle-timeout: 300000
+        max-lifetime: 1800000
+        connection-timeout: 20000
+  
+  # JPA Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        show_sql: false
+        jdbc:
+          batch_size: 25
+          fetch_size: 100
+        connection:
+          provider_disables_autocommit: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region.factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+    open-in-view: false
+  
+  # MongoDB Configuration for document storage (customer documents, analytics)
+  data:
+    mongodb:
+      uri: mongodb://mongodb-cluster:27017/customer_documents
+      auto-index-creation: true
+      field-naming-strategy: org.springframework.data.mapping.model.SnakeCaseFieldNamingStrategy
+  
+  # Redis Configuration for caching and session management
+  redis:
+    host: redis-cluster
+    port: 6379
+    password: ${REDIS_PASSWORD:}
+    database: 0
+    timeout: 5000ms
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 10
+        min-idle: 2
+        max-wait: 5000ms
+      shutdown-timeout: 100ms
+  
+  # Kafka Configuration for event streaming
+  kafka:
+    bootstrap-servers: kafka-cluster:9092
+    consumer:
+      group-id: customer-service-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: com.ufs.customer.events
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      properties:
+        enable.idempotence: true
+        max.in.flight.requests.per.connection: 1
+  
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+      client:
+        registration:
+          customer-service:
+            client-id: ${OAUTH2_CLIENT_ID:customer-service}
+            client-secret: ${OAUTH2_CLIENT_SECRET:}
+            scope: read,write
+            authorization-grant-type: client_credentials
+        provider:
+          auth-service:
+            token-uri: http://auth-service:9000/oauth2/token
+
+# Server Configuration
+server:
+  port: 8080
+  servlet:
+    context-path: /api/v1
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  shutdown: graceful
+
+# Service Discovery Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+  instance:
+    hostname: ${spring.application.name}
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: '@project.version@'
+      environment: ${spring.profiles.active}
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,loggers,env,configprops
+      base-path: /actuator
+      path-mapping:
+        prometheus: /metrics
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,db,redis,kafka
+        liveness:
+          include: livenessState,ping
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    info:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        descriptions: true
+        step: 30s
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+      version: '@project.version@'
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.75,0.90,0.95,0.99
+      sla:
+        http.server.requests: 100ms,200ms,500ms,1s,2s
+  tracing:
+    sampling:
+      probability: 1.0
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+
+# Logging Configuration
+logging:
+  level:
+    com.ufs.customer: INFO
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.data.mongodb: INFO
+    org.hibernate: INFO
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.cache: INFO
+    org.springframework.kafka: INFO
+    io.micrometer: INFO
+    net.ttddyy.dsproxy.listener: INFO
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/customer-service.log
+    max-size: 100MB
+    max-history: 30
+
+# Application-specific Configuration
+app:
+  customer:
+    # KYC and AML Configuration
+    kyc:
+      enabled: true
+      verification-timeout: 300000 # 5 minutes
+      document-types:
+        - PASSPORT
+        - DRIVERS_LICENSE
+        - NATIONAL_ID
+        - UTILITY_BILL
+      max-document-size: 10MB
+      supported-formats:
+        - image/jpeg
+        - image/png
+        - application/pdf
+    
+    # Risk Assessment Configuration
+    risk:
+      enabled: true
+      assessment-timeout: 30000 # 30 seconds
+      scoring:
+        low-threshold: 300
+        medium-threshold: 600
+        high-threshold: 800
+      external-bureau-timeout: 10000 # 10 seconds
+    
+    # Onboarding Configuration
+    onboarding:
+      max-steps: 4
+      session-timeout: 1800000 # 30 minutes
+      auto-save-interval: 30000 # 30 seconds
+      compliance-checks:
+        - AML_SCREENING
+        - SANCTIONS_CHECK
+        - PEP_SCREENING
+        - ADVERSE_MEDIA_CHECK
+    
+    # Biometric Configuration
+    biometric:
+      enabled: true
+      liveness-detection: true
+      face-match-threshold: 0.85
+      document-face-match-threshold: 0.80
+    
+    # Notification Configuration
+    notifications:
+      enabled: true
+      channels:
+        - EMAIL
+        - SMS
+        - PUSH
+      retry-attempts: 3
+      retry-delay: 5000 # 5 seconds
+
+# Circuit Breaker Configuration
+resilience4j:
+  circuitbreaker:
+    instances:
+      risk-service:
+        register-health-indicator: true
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+      external-bureau:
+        register-health-indicator: true
+        sliding-window-size: 5
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 2
+      notification-service:
+        register-health-indicator: true
+        sliding-window-size: 8
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 20s
+  
+  # Retry Configuration
+  retry:
+    instances:
+      database-operation:
+        max-attempts: 3
+        wait-duration: 1s
+        exponential-backoff-multiplier: 2
+      external-api:
+        max-attempts: 2
+        wait-duration: 2s
+        exponential-backoff-multiplier: 1.5
+  
+  # Rate Limiter Configuration
+  ratelimiter:
+    instances:
+      customer-api:
+        limit-for-period: 1000
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+      onboarding-api:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 10s
+
+# Cache Configuration
+cache:
+  caffeine:
+    customer-profile:
+      maximum-size: 1000
+      expire-after-write: 15m
+      expire-after-access: 10m
+    risk-scores:
+      maximum-size: 5000
+      expire-after-write: 5m
+    kyc-status:
+      maximum-size: 2000
+      expire-after-write: 30m
+
+---
+# Development Profile Configuration
+spring:
+  config:
+    activate:
+      on-profile: dev
+  
+  datasource:
+    primary:
+      url: jdbc:postgresql://localhost:5432/customer_db_dev
+      hikari:
+        maximum-pool-size: 5
+    replica:
+      url: jdbc:postgresql://localhost:5433/customer_db_dev
+  
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/customer_documents_dev
+  
+  redis:
+    host: localhost
+    port: 6379
+    database: 1
+  
+  kafka:
+    bootstrap-servers: localhost:9092
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    properties:
+      hibernate:
+        show_sql: true
+        format_sql: true
+
+logging:
+  level:
+    com.ufs.customer: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+
+---
+# Production Profile Configuration
+spring:
+  config:
+    activate:
+      on-profile: prod
+  
+  datasource:
+    primary:
+      hikari:
+        maximum-pool-size: 30
+        minimum-idle: 10
+        pool-name: CustomerServiceCP-PROD
+    replica:
+      hikari:
+        maximum-pool-size: 25
+        minimum-idle: 8
+        pool-name: CustomerServiceReadCP-PROD
+  
+  redis:
+    lettuce:
+      pool:
+        max-active: 100
+        max-idle: 20
+  
+  kafka:
+    producer:
+      batch-size: 32768
+      linger-ms: 5
+      buffer-memory: 67108864
+
+server:
+  tomcat:
+    threads:
+      max: 200
+      min-spare: 20
+    max-connections: 8192
+    accept-count: 100
+    connection-timeout: 60000
+
+logging:
+  level:
+    com.ufs.customer: INFO
+    org.springframework.web: WARN
+    org.hibernate.SQL: WARN
+  file:
+    path: /var/log/customer-service
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+# Production-specific resilience settings
+resilience4j:
+  circuitbreaker:
+    instances:
+      risk-service:
+        sliding-window-size: 20
+        failure-rate-threshold: 30
+      external-bureau:
+        sliding-window-size: 15
+        failure-rate-threshold: 40
+
+app:
+  customer:
+    kyc:
+      verification-timeout: 180000 # 3 minutes in production
+    risk:
+      assessment-timeout: 15000 # 15 seconds in production
+
+---
+# Test Profile Configuration
+spring:
+  config:
+    activate:
+      on-profile: test
+  
+  datasource:
+    primary:
+      url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password: 
+      hikari:
+        maximum-pool-size: 2
+    replica:
+      url: jdbc:h2:mem:testdb_replica;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+      driver-class-name: org.h2.Driver
+      username: sa
+      password: 
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+        show_sql: true
+  
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/customer_documents_test
+  
+  redis:
+    host: localhost
+    port: 6379
+    database: 15
+
+# Disable external dependencies in test
+app:
+  customer:
+    kyc:
+      enabled: false
+    risk:
+      enabled: false
+    biometric:
+      enabled: false
+    notifications:
+      enabled: false
+
+eureka:
+  client:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics

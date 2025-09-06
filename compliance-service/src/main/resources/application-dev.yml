@@ -1,0 +1,443 @@
+# ==============================================================================
+# UFS COMPLIANCE SERVICE - DEVELOPMENT CONFIGURATION
+# Development Environment Overrides for Regulatory Compliance Automation
+# Overrides base application.yml settings for local development
+# ==============================================================================
+
+# Server Configuration - Development Settings
+server:
+  port: 8084
+  # Development-specific servlet configuration
+  servlet:
+    context-path: /api/v1/compliance
+  # Relaxed timeout settings for development debugging
+  tomcat:
+    connection-timeout: 60000  # Increased for debugging
+    max-connections: 100       # Reduced for development
+    threads:
+      max: 50                  # Reduced for development environment
+      min-spare: 5
+  # Graceful shutdown with extended timeout for development
+  shutdown: graceful
+  servlet:
+    session:
+      timeout: 30m             # Extended session timeout for development
+
+# Spring Framework Development Configuration
+spring:
+  # Application identification for development service discovery
+  application:
+    name: compliance-service
+  
+  # Development profile activation
+  profiles:
+    active: dev
+    include: debug
+  
+  # Development Database Configuration - PostgreSQL
+  datasource:
+    # Development database with simplified connection string
+    url: jdbc:postgresql://localhost:5432/ufs_compliance_dev
+    username: postgres
+    password: password
+    driver-class-name: org.postgresql.Driver
+    # Development-optimized connection pool settings
+    hikari:
+      pool-name: ComplianceHikariPool-Dev
+      minimum-idle: 5          # Reduced for development
+      maximum-pool-size: 15    # Reduced for development
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      leak-detection-threshold: 30000  # Reduced threshold for development
+      connection-test-query: SELECT 1
+      # Development-specific connection properties
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 100   # Reduced for development
+        prepStmtCacheSqlLimit: 1024
+        useServerPrepStmts: true
+        rewriteBatchedStatements: true
+  
+  # JPA/Hibernate Development Configuration
+  jpa:
+    # Development setting - auto-update schema
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    # Enable SQL logging for development debugging
+    show-sql: true
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Format SQL for readability in development
+        format_sql: true
+        # Highlight SQL in console output
+        highlight_sql: true
+        # Development performance settings
+        jdbc:
+          batch_size: 10         # Reduced for development
+          fetch_size: 20         # Reduced for development
+        # Enable statistics for development monitoring
+        generate_statistics: true
+        # Optimizations for development
+        order_inserts: true
+        order_updates: true
+        # Development-friendly cache settings
+        cache:
+          use_second_level_cache: false  # Disabled for development
+          use_query_cache: false         # Disabled for development
+  
+  # Kafka Development Configuration
+  kafka:
+    bootstrap-servers: localhost:9092
+    # Producer configuration for development
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # Relaxed reliability settings for development
+      acks: 1                    # Relaxed for development speed
+      retries: 3                 # Reduced retries for development
+      enable-idempotence: false  # Disabled for development simplicity
+      # Development batch settings
+      batch-size: 8192           # Reduced for development
+      linger-ms: 10              # Increased for better batching in dev
+      buffer-memory: 16777216    # Reduced memory for development
+      # No compression for development debugging
+      compression-type: none
+      # Development timeout settings
+      request-timeout-ms: 15000
+      delivery-timeout-ms: 60000
+    
+    # Consumer configuration for development
+    consumer:
+      group-id: compliance-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Development settings for easier debugging
+      enable-auto-commit: true   # Enabled for development simplicity
+      auto-commit-interval-ms: 5000
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 3000
+      max-poll-records: 100      # Reduced for development
+      max-poll-interval-ms: 300000
+      fetch-min-bytes: 1
+      fetch-max-wait-ms: 500
+      # Trusted packages for JSON deserialization
+      properties:
+        spring.json.trusted.packages: "com.ufs.compliance.event,com.ufs.common.event,com.ufs.regulatory.event"
+        spring.json.type.mapping: "regulatory-update:com.ufs.compliance.event.RegulatoryUpdateEvent,policy-change:com.ufs.compliance.event.PolicyChangeEvent,audit-event:com.ufs.compliance.event.AuditEvent"
+  
+  # Redis Development Configuration
+  redis:
+    host: localhost
+    port: 6379
+    password: # No password for development
+    database: 1                  # Use database 1 for compliance service
+    timeout: 5000ms              # Increased timeout for development
+    # Development connection pool settings
+    lettuce:
+      pool:
+        max-active: 5            # Reduced for development
+        max-idle: 5
+        min-idle: 1
+        max-wait: 2000ms
+    # No SSL for development
+    ssl: false
+  
+  # Development Configuration Server (optional)
+  config:
+    import: "optional:configserver:http://localhost:8888"
+    fail-fast: false             # Don't fail if config server is unavailable
+
+# Service Discovery Configuration - Development Eureka
+eureka:
+  client:
+    # Development Eureka server
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    # Registration and discovery settings for development
+    register-with-eureka: true
+    fetch-registry: true
+    # More frequent updates for development
+    registry-fetch-interval-seconds: 15      # More frequent for development
+    instance-info-replication-interval-seconds: 15
+    initial-instance-info-replication-interval-seconds: 20
+    # Development health check settings
+    heartbeat-executor-thread-pool-size: 1
+    cache-refresh-executor-thread-pool-size: 1
+  
+  instance:
+    # Development instance configuration
+    prefer-ip-address: true
+    hostname: localhost
+    ip-address: 127.0.0.1
+    # Health check configuration for development
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Faster lease renewal for development
+    lease-renewal-interval-in-seconds: 15    # More frequent for development
+    lease-expiration-duration-in-seconds: 45 # Shorter expiration for development
+    # Development metadata
+    metadata-map:
+      management.context-path: /actuator
+      health.path: /actuator/health
+      configPath: /actuator/env
+      service-type: compliance
+      version: dev-SNAPSHOT
+      zone: development
+      environment: development
+
+# Management and Monitoring Configuration - Development
+management:
+  # Expose all actuator endpoints for development debugging
+  endpoints:
+    web:
+      exposure:
+        include: "*"             # Expose all endpoints in development
+      base-path: /actuator
+      # CORS configuration for development tools
+      cors:
+        allowed-origins: "http://localhost:3000,http://localhost:8080,http://localhost:4200"
+        allowed-methods: "*"
+        allowed-headers: "*"
+        allow-credentials: true
+  
+  # Development endpoint configurations
+  endpoint:
+    # Enhanced health endpoint for development
+    health:
+      show-details: always
+      show-components: always
+      group:
+        readiness:
+          include: db,kafka,redis,eureka
+        liveness:
+          include: ping,diskSpace
+    # Enable all endpoints for development
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    env:
+      enabled: true
+      show-values: always        # Show all values in development
+    configprops:
+      enabled: true
+      show-values: always        # Show all values in development
+    beans:
+      enabled: true
+    mappings:
+      enabled: true
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true              # Enabled for development debugging
+    loggers:
+      enabled: true
+    caches:
+      enabled: true
+    scheduledtasks:
+      enabled: true
+  
+  # Development metrics configuration
+  metrics:
+    enable:
+      jvm: true
+      system: true
+      http: true
+      hikaricp: true
+      cache: true
+      kafka.consumer: true
+      kafka.producer: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+    tags:
+      application: ${spring.application.name}
+      environment: development
+      region: local
+      instance: localhost
+  
+  # Enable JMX for development monitoring
+  jmx:
+    exposure:
+      include: "*"
+  
+  # Development tracing configuration
+  tracing:
+    sampling:
+      probability: 1.0           # Sample all traces in development
+
+# Development Logging Configuration
+logging:
+  # Development logging levels for detailed debugging
+  level:
+    root: INFO
+    # Enhanced logging for compliance service components
+    com.ufs.compliance: DEBUG
+    com.ufs.common: DEBUG
+    # Framework logging for development debugging
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.data: INFO
+    # Database logging for development
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG              # Enable SQL logging
+    org.hibernate.type.descriptor.sql.BasicBinder: DEBUG  # Show SQL parameters
+    # Connection pool logging
+    com.zaxxer.hikari: DEBUG
+    # Kafka detailed logging for development
+    org.apache.kafka: INFO
+    org.apache.kafka.clients.consumer: DEBUG
+    org.apache.kafka.clients.producer: DEBUG
+    # Redis logging for development
+    redis.clients.jedis: INFO
+    # Eureka client logging for development
+    com.netflix.eureka: INFO
+    com.netflix.discovery: DEBUG
+  
+  # Development logging pattern with correlation ID
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) [%X{correlationId:-}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
+  
+  # Development log file configuration
+  file:
+    name: logs/compliance-service-dev.log
+    max-size: 50MB               # Smaller files for development
+    max-history: 7               # Keep only 7 days for development
+    total-size-cap: 500MB        # Reduced total size for development
+
+# Development Security Configuration
+security:
+  # Development JWT configuration with relaxed settings
+  jwt:
+    secret: devSecretKeyForUFSComplianceServiceLocalDevelopment2024
+    issuer: ufs-auth-service-dev
+    expiration-ms: 86400000      # 24 hours
+    refresh-expiration-ms: 604800000  # 7 days
+    algorithm: HS512
+    audience: ufs-microservices-dev
+  
+  # Development CORS configuration - more permissive
+  cors:
+    allowed-origins: "http://localhost:3000,http://localhost:8080,http://localhost:4200,http://127.0.0.1:3000"
+    allowed-methods: "*"
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+
+# Application-Specific Development Configuration
+app:
+  # Development compliance settings
+  compliance:
+    # Faster update frequency for development testing
+    regulatory:
+      update-frequency: 60000    # 1 minute for development
+      batch-size: 10             # Smaller batches for development
+      max-retry-attempts: 2      # Fewer retries for development
+      data-retention-days: 30    # Shorter retention for development
+    
+    # Development audit configuration
+    audit:
+      enabled: true
+      async: false               # Synchronous for development debugging
+      batch-size: 5              # Smaller batches for development
+      flush-interval: 10000      # 10 seconds for development
+    
+    # Development report generation settings
+    reports:
+      generation-timeout: 60000  # 1 minute for development
+      max-concurrent-reports: 2  # Reduced for development
+      storage-path: ./dev-reports
+    
+    # Development threshold settings
+    thresholds:
+      risk-score-alert: 60       # Lower threshold for development testing
+      transaction-amount-review: 1000  # Lower amount for development testing
+      suspicious-activity-score: 50    # Lower threshold for development testing
+  
+  # Development cache configuration
+  cache:
+    default-ttl: 300             # 5 minutes for development
+    regulatory-rules-ttl: 180    # 3 minutes for development
+    customer-profile-ttl: 120    # 2 minutes for development
+    max-entries: 1000            # Reduced for development
+    
+  # Development circuit breaker configuration
+  circuit-breaker:
+    failure-rate-threshold: 70   # Higher threshold for development
+    wait-duration-in-open-state: 10000  # 10 seconds for development
+    sliding-window-size: 5       # Smaller window for development
+    minimum-number-of-calls: 3   # Fewer calls required for development
+  
+  # Development retry configuration
+  retry:
+    max-attempts: 2              # Fewer attempts for development
+    backoff-delay: 500           # Shorter delay for development
+    max-delay: 5000              # Shorter max delay for development
+  
+  # Development rate limiting configuration
+  rate-limit:
+    enabled: false               # Disabled for development testing
+    requests-per-minute: 10000   # High limit for development
+    burst-capacity: 1000         # High burst for development
+
+# Development Monitoring Configuration
+monitoring:
+  # Development health check configuration
+  health:
+    db-timeout: 10000            # Increased timeout for development debugging
+    kafka-timeout: 5000          # Increased timeout for development
+    redis-timeout: 3000          # Increased timeout for development
+  
+  # Development alerting thresholds (more lenient)
+  alerts:
+    cpu-threshold: 90            # Higher threshold for development
+    memory-threshold: 95         # Higher threshold for development
+    disk-threshold: 95           # Higher threshold for development
+    response-time-threshold: 5000  # Higher threshold for development
+    error-rate-threshold: 10     # Higher error rate allowed in development
+
+# Development Thread Pool Configuration
+async:
+  core-pool-size: 5              # Reduced for development
+  max-pool-size: 10              # Reduced for development
+  queue-capacity: 100            # Reduced for development
+  thread-name-prefix: ComplianceAsync-Dev-
+  keep-alive-seconds: 30         # Shorter keep-alive for development
+
+# Development Validation Configuration
+validation:
+  enabled: true
+  fail-fast: false               # Don't fail fast in development for debugging
+  messages:
+    source: classpath:validation-messages.properties
+
+# Development Debug Configuration
+debug:
+  enabled: true                  # Enable debug mode for development
+  include-stacktrace: always     # Always include stack traces in development
+  log-request-details: true      # Log request/response for debugging
+
+# Development-specific additional properties
+spring.jpa.properties.hibernate.session.events.log.LOG_QUERIES_SLOWER_THAN_MS: 1000
+
+# Development H2 Console (if needed for testing)
+spring.h2.console.enabled: false
+
+# Development DevTools Configuration
+spring.devtools:
+  restart:
+    enabled: true
+    additional-paths: src/main/java
+  livereload:
+    enabled: true

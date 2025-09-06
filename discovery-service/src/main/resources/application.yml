@@ -1,0 +1,370 @@
+# Discovery Service Configuration
+# Production-ready Eureka Server configuration for Financial Services Platform
+# Implements service discovery for microservices architecture with enhanced security,
+# monitoring, and compliance features required for financial applications
+
+server:
+  port: 8761
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  http2:
+    enabled: true
+  # Security configuration for financial services compliance
+  ssl:
+    enabled: false  # Handled by service mesh/ingress controller in production
+  error:
+    whitelabel:
+      enabled: false
+    include-stacktrace: never
+    include-message: never
+
+spring:
+  application:
+    name: discovery-service
+  
+  # Security configuration for financial services
+  security:
+    user:
+      name: ${EUREKA_USERNAME:admin}
+      password: ${EUREKA_PASSWORD:admin123}
+  
+  # JPA/Database configuration for service registry persistence
+  datasource:
+    url: ${DB_URL:jdbc:h2:mem:discovery}
+    username: ${DB_USERNAME:sa}
+    password: ${DB_PASSWORD:}
+    driver-class-name: ${DB_DRIVER:org.h2.Driver}
+    hikari:
+      minimum-idle: 2
+      maximum-pool-size: 10
+      idle-timeout: 300000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+  
+  jpa:
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: ${DB_DIALECT:org.hibernate.dialect.H2Dialect}
+  
+  # Cloud configuration
+  cloud:
+    loadbalancer:
+      enabled: true
+    discovery:
+      enabled: true
+
+# Eureka Server Configuration
+eureka:
+  instance:
+    hostname: ${EUREKA_HOSTNAME:localhost}
+    prefer-ip-address: true
+    ip-address: ${EUREKA_IP_ADDRESS:127.0.0.1}
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    metadata-map:
+      zone: ${EUREKA_ZONE:default}
+      version: ${BUILD_VERSION:1.0.0}
+      environment: ${ENVIRONMENT:development}
+      startup: ${eureka.instance.instanceId}
+  
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:http://localhost:8761/eureka/}
+    registry-fetch-interval-seconds: 5
+    instance-info-replication-interval-seconds: 5
+    initial-instance-info-replication-interval-seconds: 5
+    eureka-service-url-poll-interval-seconds: 60
+    eureka-server-read-timeout-seconds: 8
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-total-connections: 200
+    eureka-server-total-connections-per-host: 50
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 2
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 2
+    cache-refresh-executor-exponential-back-off-bound: 10
+  
+  server:
+    # Core server settings
+    enable-self-preservation: ${EUREKA_SELF_PRESERVATION:true}
+    wait-time-in-ms-when-sync-empty: 0
+    response-cache-auto-expiration-in-seconds: 180
+    response-cache-update-interval-ms: 30000
+    use-read-only-response-cache: true
+    
+    # Peer replication settings for high availability
+    peer-eureka-nodes-update-interval-ms: 600000
+    peer-eureka-status-refresh-time-interval-ms: 30000
+    number-of-replication-retries: 5
+    peer-node-read-timeout-ms: 200
+    peer-node-connect-timeout-ms: 200
+    peer-node-total-connections: 1000
+    peer-node-total-connections-per-host: 500
+    peer-node-connection-idle-timeout-seconds: 30
+    
+    # Registry settings for performance optimization
+    eviction-interval-timer-in-ms: 60000
+    renewal-percent-threshold: 0.85
+    renewal-threshold-update-interval-ms: 900000
+    expected-client-renewal-interval-seconds: 30
+    min-threads-for-status-replication: 1
+    max-threads-for-status-replication: 1
+    max-idle-thread-in-minutes-age-for-status-replication: 10
+    batch-size: 1
+    
+    # Rate limiting for financial services compliance
+    rate-limiter-enabled: true
+    rate-limiter-burst-size: 10
+    rate-limiter-registry-fetch-average-rate: 500
+    rate-limiter-full-fetch-average-rate: 100
+    
+    # Experimental features
+    experimental:
+      enable-compression: true
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,eureka,env,configprops,beans,threaddump,heapdump
+      base-path: /actuator
+      path-mapping:
+        prometheus: /metrics
+    enabled-by-default: false
+  
+  endpoint:
+    health:
+      enabled: true
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: ADMIN,ACTUATOR
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    eureka:
+      enabled: true
+    env:
+      enabled: true
+      show-values: when-authorized
+    configprops:
+      enabled: true
+      show-values: when-authorized
+    beans:
+      enabled: true
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true
+  
+  health:
+    defaults:
+      enabled: true
+    eureka:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 100MB
+    db:
+      enabled: true
+  
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+    git:
+      enabled: true
+    build:
+      enabled: true
+  
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        descriptions: true
+        step: 10s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        eureka.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.9, 0.95, 0.99
+        eureka.server.requests: 0.5, 0.75, 0.9, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:development}
+      version: ${BUILD_VERSION:1.0.0}
+      instance: ${eureka.instance.instance-id}
+    web:
+      server:
+        auto-time-requests: true
+
+# Logging Configuration for Financial Services Compliance
+logging:
+  level:
+    root: INFO
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    org.springframework.cloud.netflix.eureka: INFO
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate: WARN
+    org.springframework.boot.actuate: INFO
+    # Financial services specific logging
+    audit: INFO
+    security: INFO
+    performance: INFO
+  
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  
+  file:
+    name: ${LOG_FILE:/var/log/discovery-service/discovery-service.log}
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+  
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 1GB
+
+# Application-specific configuration
+app:
+  name: ${spring.application.name}
+  version: ${BUILD_VERSION:1.0.0}
+  description: "Discovery Service for Financial Services Platform"
+  environment: ${ENVIRONMENT:development}
+  
+  # Security settings for financial services
+  security:
+    enabled: true
+    cors:
+      enabled: true
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
+    
+    # Rate limiting configuration
+    rate-limit:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 100
+  
+  # Monitoring and observability
+  monitoring:
+    enabled: true
+    metrics:
+      enabled: true
+      jvm: true
+      system: true
+      custom: true
+    tracing:
+      enabled: true
+      sampling-rate: 0.1
+  
+  # High availability settings
+  ha:
+    enabled: ${HA_ENABLED:false}
+    cluster-size: ${CLUSTER_SIZE:3}
+    peer-nodes: ${PEER_NODES:}
+  
+  # Performance tuning for financial services workloads
+  performance:
+    cache:
+      enabled: true
+      size: 10000
+      ttl: 300
+    connection-pool:
+      min-idle: 5
+      max-active: 50
+      max-wait: 10000
+    thread-pool:
+      core-size: 10
+      max-size: 50
+      queue-capacity: 1000
+
+# Feature flags for gradual rollout
+features:
+  enhanced-security: ${FEATURE_ENHANCED_SECURITY:true}
+  metrics-collection: ${FEATURE_METRICS_COLLECTION:true}
+  distributed-tracing: ${FEATURE_DISTRIBUTED_TRACING:true}
+  rate-limiting: ${FEATURE_RATE_LIMITING:true}
+  audit-logging: ${FEATURE_AUDIT_LOGGING:true}
+
+# Environment-specific overrides (can be externalized)
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+  
+eureka:
+  server:
+    enable-self-preservation: false
+    eviction-interval-timer-in-ms: 5000
+
+logging:
+  level:
+    root: DEBUG
+    com.netflix.eureka: DEBUG
+
+---
+spring:
+  config:
+    activate:
+      on-profile: staging,production
+
+server:
+  ssl:
+    enabled: true
+    key-store: ${SSL_KEY_STORE:/etc/ssl/certs/discovery-service.p12}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD}
+    key-store-type: PKCS12
+    trust-store: ${SSL_TRUST_STORE:/etc/ssl/certs/truststore.p12}
+    trust-store-password: ${SSL_TRUST_STORE_PASSWORD}
+
+eureka:
+  server:
+    enable-self-preservation: true
+    renewal-percent-threshold: 0.85
+    rate-limiter-enabled: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+    env:
+      show-values: never
+    configprops:
+      show-values: never
+
+logging:
+  level:
+    root: INFO
+    com.netflix.eureka: WARN

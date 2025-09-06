@@ -1,0 +1,342 @@
+# =============================================================================
+# Spring Cloud Config Server - Production Configuration
+# =============================================================================
+# This configuration file provides production-specific settings for the
+# centralized configuration service in a microservices architecture.
+# It includes security, service discovery, and Git repository configuration.
+
+# =============================================================================
+# SERVER CONFIGURATION
+# =============================================================================
+server:
+  port: 8888
+  # Production SSL configuration for secure communication
+  ssl:
+    enabled: true
+    key-store: ${SSL_KEYSTORE_PATH:classpath:config-server-keystore.p12}
+    key-store-password: ${SSL_KEYSTORE_PASSWORD}
+    key-store-type: PKCS12
+    key-alias: config-server
+  # Connection timeout settings for production load
+  tomcat:
+    connection-timeout: 30000
+    max-threads: 200
+    min-spare-threads: 20
+    max-connections: 8192
+  # Compression for better performance
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+
+# =============================================================================
+# SPRING CONFIGURATION
+# =============================================================================
+spring:
+  application:
+    name: config-server
+  
+  # =============================================================================
+  # SPRING CLOUD CONFIG SERVER CONFIGURATION
+  # =============================================================================
+  cloud:
+    config:
+      server:
+        git:
+          # Primary Git repository for configuration storage
+          uri: ${GIT_CONFIG_URI:https://github.com/your-org/config-repo}
+          default-label: ${GIT_DEFAULT_BRANCH:main}
+          username: ${GIT_USER}
+          password: ${GIT_PASSWORD}
+          # Production optimizations
+          clone-on-start: true
+          force-pull: true
+          delete-untracked-branches: true
+          timeout: 10
+          # Repository refresh settings
+          refresh-rate: 30
+          # Security configuration for Git access
+          skip-ssl-validation: false
+          host-key-algorithm: ssh-rsa
+          host-key: ${GIT_HOST_KEY:}
+          private-key: ${GIT_PRIVATE_KEY:}
+          passphrase: ${GIT_PASSPHRASE:}
+          # Search paths for configuration files
+          search-paths:
+            - '{application}'
+            - '{application}/{profile}'
+            - 'shared'
+            - 'shared/{application}'
+          # Multiple repositories support for different environments
+          repos:
+            financial-services:
+              pattern: 'financial-*,payment-*,trading-*'
+              uri: ${GIT_FINANCIAL_REPO_URI:https://github.com/your-org/financial-configs}
+              username: ${GIT_FINANCIAL_USER}
+              password: ${GIT_FINANCIAL_PASSWORD}
+            blockchain:
+              pattern: 'blockchain-*,hyperledger-*'
+              uri: ${GIT_BLOCKCHAIN_REPO_URI:https://github.com/your-org/blockchain-configs}
+              username: ${GIT_BLOCKCHAIN_USER}
+              password: ${GIT_BLOCKCHAIN_PASSWORD}
+            compliance:
+              pattern: 'compliance-*,audit-*,regulatory-*'
+              uri: ${GIT_COMPLIANCE_REPO_URI:https://github.com/your-org/compliance-configs}
+              username: ${GIT_COMPLIANCE_USER}
+              password: ${GIT_COMPLIANCE_PASSWORD}
+        
+        # Health indicators configuration
+        health:
+          repositories:
+            enabled: true
+        
+        # Encryption configuration for sensitive properties
+        encrypt:
+          enabled: true
+          key: ${CONFIG_SERVER_ENCRYPT_KEY}
+          key-store:
+            location: ${ENCRYPT_KEYSTORE_LOCATION:classpath:server.jks}
+            password: ${ENCRYPT_KEYSTORE_PASSWORD}
+            alias: ${ENCRYPT_KEY_ALIAS:mytestkey}
+            secret: ${ENCRYPT_KEY_SECRET}
+
+  # =============================================================================
+  # SECURITY CONFIGURATION
+  # =============================================================================
+  security:
+    user:
+      name: ${CONFIG_SERVER_USER}
+      password: ${CONFIG_SERVER_PASSWORD}
+      roles: ADMIN,ACTUATOR
+    # OAuth2 configuration for enterprise authentication
+    oauth2:
+      client:
+        registration:
+          auth0:
+            client-id: ${OAUTH2_CLIENT_ID}
+            client-secret: ${OAUTH2_CLIENT_SECRET}
+            scope: openid,profile,email
+            redirect-uri: ${OAUTH2_REDIRECT_URI:https://config-server-prod.yourcompany.com/login/oauth2/code/auth0}
+        provider:
+          auth0:
+            issuer-uri: ${OAUTH2_ISSUER_URI:https://yourcompany.auth0.com/}
+
+  # =============================================================================
+  # DATASOURCE CONFIGURATION (for audit logging)
+  # =============================================================================
+  datasource:
+    url: ${CONFIG_AUDIT_DB_URL:jdbc:postgresql://config-audit-db-prod:5432/config_audit}
+    username: ${CONFIG_AUDIT_DB_USER}
+    password: ${CONFIG_AUDIT_DB_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      leak-detection-threshold: 60000
+
+  # =============================================================================
+  # JPA CONFIGURATION
+  # =============================================================================
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        jdbc:
+          batch_size: 20
+        order_inserts: true
+        order_updates: true
+
+# =============================================================================
+# EUREKA SERVICE DISCOVERY CONFIGURATION
+# =============================================================================
+eureka:
+  client:
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://discovery-service-prod:8761/eureka/}
+    register-with-eureka: true
+    fetch-registry: true
+    # Production-specific settings
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-read-timeout-seconds: 8
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-total-connections: 200
+    eureka-server-total-connections-per-host: 50
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 5
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 5
+    cache-refresh-executor-exponential-back-off-bound: 10
+  instance:
+    prefer-ip-address: true
+    # Instance identification
+    instance-id: ${spring.application.name}:${spring.profiles.active}:${server.port}
+    hostname: ${HOSTNAME:config-server-prod}
+    # Health check configuration
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Lease settings for production
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    # Metadata for service identification
+    metadata-map:
+      zone: production
+      version: '@project.version@'
+      profiles: ${spring.profiles.active}
+      git-version: '@git.commit.id.abbrev@'
+      git-commit-time: '@git.commit.time@'
+
+# =============================================================================
+# ACTUATOR CONFIGURATION
+# =============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,refresh,env,configprops,beans,httptrace,threaddump,heapdump
+      base-path: /actuator
+      cors:
+        allowed-origins: ${CORS_ALLOWED_ORIGINS:https://admin.yourcompany.com}
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      show-details: when-authorized
+      roles: ADMIN
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    refresh:
+      enabled: true
+    env:
+      show-values: when-authorized
+      roles: ADMIN
+  # Metrics configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+      # Additional metrics exports for monitoring
+      elastic:
+        enabled: ${ELASTIC_METRICS_ENABLED:false}
+        host: ${ELASTIC_HOST:http://elasticsearch-prod:9200}
+        index: config-server-metrics
+        step: 30s
+    # Custom metrics
+    tags:
+      application: ${spring.application.name}
+      environment: production
+    # JVM metrics
+    enable:
+      jvm: true
+      system: true
+      web: true
+      tomcat: true
+      process: true
+  # Health indicators configuration
+  health:
+    git:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 10GB
+    ping:
+      enabled: true
+  # Tracing configuration
+  tracing:
+    sampling:
+      probability: 0.1
+    zipkin:
+      endpoint: ${ZIPKIN_ENDPOINT:http://zipkin-prod:9411}
+
+# =============================================================================
+# LOGGING CONFIGURATION
+# =============================================================================
+logging:
+  level:
+    org.springframework.cloud.config: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    org.eclipse.jgit: WARN
+    root: INFO
+    # Financial services specific logging
+    com.yourcompany.config: DEBUG
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId},%X{spanId}] %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId},%X{spanId}] %logger{36} - %msg%n'
+  file:
+    name: ${LOG_FILE:/var/log/config-server/config-server.log}
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+  # Structured logging for production
+  charset:
+    console: UTF-8
+    file: UTF-8
+
+# =============================================================================
+# CUSTOM APPLICATION PROPERTIES
+# =============================================================================
+app:
+  # Configuration refresh settings
+  config:
+    refresh:
+      enabled: true
+      cron: "0 */5 * * * *"  # Every 5 minutes
+    # Audit configuration
+    audit:
+      enabled: true
+      log-requests: true
+      log-responses: false  # Avoid logging sensitive data
+      retention-days: 90
+  # Security settings
+  security:
+    # Rate limiting
+    rate-limit:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 1200
+    # IP whitelist for additional security
+    ip-whitelist:
+      enabled: ${IP_WHITELIST_ENABLED:false}
+      allowed-ips: ${ALLOWED_IPS:}
+  # Monitoring and alerting
+  monitoring:
+    alerts:
+      enabled: true
+      webhook-url: ${SLACK_WEBHOOK_URL:}
+      email-recipients: ${ALERT_EMAIL_RECIPIENTS:}
+    # Performance thresholds
+    thresholds:
+      response-time-ms: 1000
+      error-rate-percent: 1.0
+      cpu-usage-percent: 80.0
+      memory-usage-percent: 85.0
+
+# =============================================================================
+# PRODUCTION ENVIRONMENT VARIABLES
+# =============================================================================
+# The following environment variables must be set in production:
+# - GIT_USER: Git repository username
+# - GIT_PASSWORD: Git repository password or token
+# - CONFIG_SERVER_USER: Config server basic auth username
+# - CONFIG_SERVER_PASSWORD: Config server basic auth password
+# - CONFIG_SERVER_ENCRYPT_KEY: Encryption key for sensitive properties
+# - SSL_KEYSTORE_PASSWORD: SSL keystore password
+# - CONFIG_AUDIT_DB_USER: Audit database username
+# - CONFIG_AUDIT_DB_PASSWORD: Audit database password
+# - OAUTH2_CLIENT_ID: OAuth2 client ID
+# - OAUTH2_CLIENT_SECRET: OAuth2 client secret
+# =============================================================================

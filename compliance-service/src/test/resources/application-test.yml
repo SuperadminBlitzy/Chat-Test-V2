@@ -1,0 +1,253 @@
+# =============================================================================
+# COMPLIANCE SERVICE TEST CONFIGURATION
+# =============================================================================
+# This configuration file provides test-specific settings for the compliance
+# service, enabling isolated testing with H2 in-memory database and simplified
+# security setup for automated integration tests.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# SERVER CONFIGURATION
+# -----------------------------------------------------------------------------
+server:
+  port: 0  # Random available port for parallel test execution
+
+# -----------------------------------------------------------------------------
+# SPRING BOOT APPLICATION CONFIGURATION
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: compliance-service
+  
+  # ---------------------------------------------------------------------------
+  # DATASOURCE CONFIGURATION - H2 IN-MEMORY DATABASE
+  # ---------------------------------------------------------------------------
+  # Using H2 for fast, isolated testing without external database dependencies
+  datasource:
+    url: jdbc:h2:mem:compliancedb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver  # H2 Database Engine 2.1+
+    username: sa
+    password: ''
+    # Ensure database schema is recreated for each test run
+    initialization-mode: always
+    
+  # ---------------------------------------------------------------------------
+  # JPA/HIBERNATE CONFIGURATION
+  # ---------------------------------------------------------------------------
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: update  # Update schema automatically for testing
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    show-sql: true  # Enable SQL logging for test debugging
+    properties:
+      hibernate:
+        format_sql: true  # Format SQL output for readability
+        use_sql_comments: true  # Add helpful comments to generated SQL
+        jdbc:
+          batch_size: 20  # Optimize batch operations
+        order_inserts: true  # Order SQL inserts for better performance
+        order_updates: true  # Order SQL updates for better performance
+        connection:
+          provider_disables_autocommit: true  # Improve performance
+    defer-datasource-initialization: true  # Initialize data after schema creation
+    
+  # ---------------------------------------------------------------------------
+  # H2 DATABASE CONSOLE CONFIGURATION
+  # ---------------------------------------------------------------------------
+  # Enable H2 web console for test database inspection during development
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+      settings:
+        trace: false
+        web-allow-others: false
+        
+  # ---------------------------------------------------------------------------
+  # SQL INITIALIZATION CONFIGURATION
+  # ---------------------------------------------------------------------------
+  sql:
+    init:
+      mode: always  # Always run initialization scripts
+      continue-on-error: false  # Fail fast on SQL errors
+      
+  # ---------------------------------------------------------------------------
+  # SECURITY CONFIGURATION - OAUTH2 RESOURCE SERVER
+  # ---------------------------------------------------------------------------
+  # Simplified OAuth2 configuration for testing with mock JWT validation
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Mock JWT validation endpoint for testing
+          # In production, this points to the actual authorization server
+          jwk-set-uri: http://localhost:8081/auth/realms/ufs/protocol/openid-connect/certs
+          issuer-uri: http://localhost:8081/auth/realms/ufs
+          # Additional JWT validation settings
+          audiences:
+            - compliance-service
+            - ufs-platform
+          
+  # ---------------------------------------------------------------------------
+  # TRANSACTION CONFIGURATION
+  # ---------------------------------------------------------------------------
+  transaction:
+    default-timeout: 30s  # Set reasonable timeout for test transactions
+    rollback-on-commit-failure: true  # Ensure proper cleanup on failures
+
+# -----------------------------------------------------------------------------
+# EUREKA SERVICE DISCOVERY CONFIGURATION
+# -----------------------------------------------------------------------------
+# Disable Eureka for testing to avoid external service dependencies
+eureka:
+  client:
+    enabled: false  # Disable service discovery for isolated testing
+    register-with-eureka: false  # Don't register with Eureka registry
+    fetch-registry: false  # Don't fetch service registry
+    
+# -----------------------------------------------------------------------------
+# LOGGING CONFIGURATION
+# -----------------------------------------------------------------------------
+# Enhanced logging for test debugging and compliance audit requirements
+logging:
+  level:
+    # Application-specific logging
+    com.ufs.compliance: DEBUG  # Detailed compliance service logging
+    com.ufs: INFO  # General UFS platform logging
+    
+    # Spring Framework logging
+    org.springframework.web: INFO  # Web layer logging
+    org.springframework.security: INFO  # Security framework logging
+    org.springframework.transaction: INFO  # Transaction management logging
+    org.springframework.data.jpa: INFO  # JPA logging
+    
+    # Hibernate/JPA logging
+    org.hibernate: INFO  # Hibernate framework logging
+    org.hibernate.SQL: DEBUG  # SQL statement logging
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Parameter binding
+    org.hibernate.stat: INFO  # Hibernate statistics
+    
+    # Database logging
+    org.h2: INFO  # H2 database logging
+    
+    # Test-specific logging
+    org.springframework.test: INFO  # Spring Test framework
+    org.junit: INFO  # JUnit testing framework
+    
+    # OAuth2/Security logging for testing
+    org.springframework.security.oauth2: DEBUG  # OAuth2 debugging
+    org.springframework.security.jwt: DEBUG  # JWT processing
+    
+  # Test-specific logging patterns
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    
+# -----------------------------------------------------------------------------
+# MANAGEMENT/ACTUATOR CONFIGURATION
+# -----------------------------------------------------------------------------
+# Enable actuator endpoints for test monitoring and health checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,loggers  # Essential endpoints for testing
+  endpoint:
+    health:
+      show-details: always  # Show detailed health information
+  health:
+    defaults:
+      enabled: true
+    db:
+      enabled: true  # Database health indicator
+      
+# -----------------------------------------------------------------------------
+# COMPLIANCE SERVICE SPECIFIC TEST CONFIGURATION
+# -----------------------------------------------------------------------------
+# Custom configuration properties for compliance service testing
+compliance:
+  # Test-specific compliance settings
+  test:
+    enabled: true
+    mock-external-services: true  # Mock external compliance APIs
+    
+  # Regulatory data configuration for testing
+  regulatory:
+    # Mock regulatory data providers for testing
+    providers:
+      enabled: false  # Disable external regulatory data providers
+      
+  # Audit configuration for testing
+  audit:
+    enabled: true  # Enable audit logging for compliance testing
+    level: DEBUG  # Detailed audit logging for test verification
+    
+  # Risk assessment configuration for testing
+  risk:
+    assessment:
+      mock-mode: true  # Use mock risk assessment for testing
+      
+# -----------------------------------------------------------------------------
+# CACHE CONFIGURATION
+# -----------------------------------------------------------------------------
+# Simple cache configuration for testing
+spring:
+  cache:
+    type: simple  # Use simple in-memory cache for testing
+    cache-names:
+      - compliance-rules
+      - regulatory-updates
+      - risk-assessments
+      
+# -----------------------------------------------------------------------------
+# ASYNC PROCESSING CONFIGURATION
+# -----------------------------------------------------------------------------
+# Configure async processing for compliance operations testing
+spring:
+  task:
+    execution:
+      pool:
+        core-size: 2  # Minimal thread pool for testing
+        max-size: 4   # Limited max threads for test environment
+        queue-capacity: 100
+        keep-alive: 60s
+    scheduling:
+      pool:
+        size: 2  # Minimal scheduled task pool for testing
+        
+# -----------------------------------------------------------------------------
+# JACKSON JSON CONFIGURATION
+# -----------------------------------------------------------------------------
+# JSON serialization configuration for compliance testing
+spring:
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false  # Use ISO date format
+      fail-on-empty-beans: false  # Allow empty beans in responses
+    deserialization:
+      fail-on-unknown-properties: false  # Ignore unknown JSON properties
+    default-property-inclusion: NON_NULL  # Exclude null values from JSON
+    
+# -----------------------------------------------------------------------------
+# TEST PROFILE SPECIFIC PROPERTIES
+# -----------------------------------------------------------------------------
+# Additional test-specific configuration
+test:
+  # Database configuration
+  database:
+    cleanup-after-test: true  # Clean up test data after each test
+    
+  # Security configuration
+  security:
+    bypass-jwt-validation: false  # Keep JWT validation for integration tests
+    mock-user-roles: true  # Use mock user roles for testing
+    
+  # Performance configuration
+  performance:
+    timeout:
+      default: 5000  # 5 second default timeout for test operations
+      database: 3000  # 3 second timeout for database operations
+      external-api: 2000  # 2 second timeout for external API calls

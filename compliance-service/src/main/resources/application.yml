@@ -1,0 +1,534 @@
+# ==============================================================================
+# UFS COMPLIANCE SERVICE CONFIGURATION
+# Production-Ready Configuration for Regulatory Compliance Automation
+# ==============================================================================
+
+# Server Configuration - Port 8084 for compliance service isolation
+server:
+  port: 8084
+  # Production-grade server settings for financial services
+  servlet:
+    context-path: /api/v1/compliance
+  # Enhanced security headers for compliance requirements
+  forward-headers-strategy: native
+  # Connection timeout for high-availability requirements
+  tomcat:
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+    # Connection pool settings for high throughput
+    max-http-post-size: 2097152
+  # Graceful shutdown for compliance data integrity
+  shutdown: graceful
+  # SSL configuration placeholder for production
+  ssl:
+    enabled: false # Set to true in production with proper certificates
+
+# Spring Framework Configuration
+spring:
+  # Application identification for service discovery and monitoring
+  application:
+    name: compliance-service
+  
+  # Configuration server integration for centralized configuration management
+  config:
+    import: "optional:configserver:http://localhost:8888"
+  
+  # Primary Database Configuration - PostgreSQL for ACID compliance
+  datasource:
+    # Primary database for compliance data with enhanced connection settings
+    url: jdbc:postgresql://localhost:5432/ufs_compliance_db?useSSL=true&sslmode=require&serverTimezone=UTC&reWriteBatchedInserts=true&prepStmtCacheSize=512&prepStmtCacheSqlLimit=2048
+    username: ${DB_USERNAME:postgres}
+    password: ${DB_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    # Connection pool configuration for high-performance financial operations
+    hikari:
+      pool-name: ComplianceHikariPool
+      minimum-idle: 10
+      maximum-pool-size: 30
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      # Compliance-specific connection properties
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+  
+  # JPA/Hibernate Configuration for regulatory data management
+  jpa:
+    # Development setting - change to 'validate' in production
+    hibernate:
+      ddl-auto: ${DDL_AUTO:update}
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    # SQL visibility for audit and debugging purposes
+    show-sql: ${SHOW_SQL:false}
+    # Optimize for compliance data operations
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        # Performance optimizations for compliance queries
+        jdbc:
+          batch_size: 25
+          fetch_size: 50
+        # Enable statistics for monitoring
+        generate_statistics: true
+        # Second-level cache configuration
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        # Connection provider for better connection management
+        connection:
+          provider_disables_autocommit: true
+        # Optimizations for regulatory compliance operations
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
+        # Audit trail configuration
+        event:
+          merge:
+            entity_copy_observer: log
+          auto:
+            flush_mode: COMMIT
+  
+  # Kafka Configuration for Event-Driven Regulatory Compliance
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    # Producer configuration for regulatory event publishing
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      # Reliability settings for compliance events
+      acks: all
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      enable-idempotence: true
+      # Batch settings for performance
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      # Compression for efficient network usage
+      compression-type: snappy
+      # Transaction configuration for compliance data integrity
+      transaction-id-prefix: compliance-service-
+      # Retry configuration
+      retry-backoff-ms: 100
+      request-timeout-ms: 30000
+      delivery-timeout-ms: 120000
+    
+    # Consumer configuration for regulatory update consumption
+    consumer:
+      group-id: ${KAFKA_GROUP_ID:compliance-group}
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Reliability and performance settings
+      enable-auto-commit: false
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 3000
+      max-poll-records: 500
+      max-poll-interval-ms: 300000
+      fetch-min-bytes: 1
+      fetch-max-wait-ms: 500
+      # Consumer group management
+      partition-assignment-strategy: org.apache.kafka.clients.consumer.CooperativeStickyAssignor
+      # Security and isolation settings
+      isolation-level: read_committed
+      # Trusted packages for JSON deserialization security
+      properties:
+        spring.json.trusted.packages: "com.ufs.compliance.event,com.ufs.common.event,com.ufs.regulatory.event"
+        spring.json.type.mapping: "regulatory-update:com.ufs.compliance.event.RegulatoryUpdateEvent,policy-change:com.ufs.compliance.event.PolicyChangeEvent,audit-event:com.ufs.compliance.event.AuditEvent"
+    
+    # Admin configuration for topic management
+    admin:
+      properties:
+        bootstrap.servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+        request.timeout.ms: 30000
+    
+    # Global Kafka properties for SSL and security (configure in production)
+    properties:
+      # Security configuration (uncomment and configure for production)
+      # security.protocol: SSL
+      # ssl.truststore.location: /path/to/kafka.client.truststore.jks
+      # ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD}
+      # ssl.keystore.location: /path/to/kafka.client.keystore.jks
+      # ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD}
+      # Consumer interceptor for audit trail
+      interceptor.classes: org.apache.kafka.clients.consumer.ConsumerInterceptor
+  
+  # Redis Configuration for Caching and Session Management
+  redis:
+    host: ${REDIS_HOST:localhost}
+    port: ${REDIS_PORT:6379}
+    password: ${REDIS_PASSWORD:}
+    database: ${REDIS_DATABASE:1}
+    timeout: 2000ms
+    # Connection pool settings
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+    # Cluster configuration (for production)
+    cluster:
+      max-redirects: 3
+    # SSL configuration (for production)
+    ssl: false
+
+  # Profiles Configuration
+  profiles:
+    active: ${SPRING_PROFILES_ACTIVE:dev}
+    include: ${SPRING_PROFILES_INCLUDE:}
+
+# Service Discovery Configuration - Eureka Client
+eureka:
+  client:
+    # Eureka server configuration
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka/}
+    # Registration and discovery settings
+    register-with-eureka: true
+    fetch-registry: true
+    # Performance optimizations
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+    # Health check and heartbeat configuration
+    heartbeat-executor-thread-pool-size: 2
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 2
+    cache-refresh-executor-exponential-back-off-bound: 10
+  
+  instance:
+    # Service instance configuration
+    prefer-ip-address: true
+    # Hostname configuration for service discovery
+    hostname: ${HOSTNAME:localhost}
+    ip-address: ${INSTANCE_IP:127.0.0.1}
+    # Health check configuration for high availability
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    # Lease renewal and expiration for quick failover
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    # Instance metadata for monitoring and management
+    metadata-map:
+      management.context-path: /actuator
+      health.path: /actuator/health
+      configPath: /actuator/env
+      service-type: compliance
+      version: ${BUILD_VERSION:1.0.0}
+      zone: ${DATACENTER_ZONE:primary}
+
+# Management and Monitoring Configuration
+management:
+  # Actuator endpoints configuration
+  endpoints:
+    web:
+      # Expose all endpoints for comprehensive monitoring
+      exposure:
+        include: "*"
+      # Base path for management endpoints
+      base-path: /actuator
+      # CORS configuration for monitoring dashboards
+      cors:
+        allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+        allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+        allowed-headers: "*"
+        allow-credentials: true
+  
+  # Individual endpoint configurations
+  endpoint:
+    # Health endpoint for load balancer and service discovery
+    health:
+      show-details: always
+      show-components: always
+      # Custom health indicators
+      group:
+        readiness:
+          include: db,kafka,redis,eureka
+        liveness:
+          include: ping,diskSpace
+    # Info endpoint for service metadata
+    info:
+      enabled: true
+    # Metrics endpoint for Prometheus integration
+    metrics:
+      enabled: true
+      export:
+        prometheus:
+          enabled: true
+          step: 1m
+          descriptions: true
+    # Environment endpoint for configuration visibility
+    env:
+      enabled: true
+      show-values: when-authorized
+    # Configuration properties endpoint
+    configprops:
+      enabled: true
+      show-values: when-authorized
+    # Beans endpoint for dependency analysis
+    beans:
+      enabled: true
+    # Mappings endpoint for API documentation
+    mappings:
+      enabled: true
+    # Thread dump for performance analysis
+    threaddump:
+      enabled: true
+    # Heap dump for memory analysis (disabled by default for security)
+    heapdump:
+      enabled: false
+    # Loggers endpoint for runtime log level changes
+    loggers:
+      enabled: true
+    # Caches endpoint for cache monitoring
+    caches:
+      enabled: true
+    # Scheduledtasks endpoint for scheduled job monitoring
+    scheduledtasks:
+      enabled: true
+  
+  # Metrics configuration for business and technical monitoring
+  metrics:
+    enable:
+      # JVM metrics
+      jvm: true
+      # System metrics
+      system: true
+      # HTTP metrics
+      http: true
+      # Database metrics
+      hikaricp: true
+      # Cache metrics
+      cache: true
+      # Kafka metrics
+      kafka.consumer: true
+      kafka.producer: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+    tags:
+      # Common tags for all metrics
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:dev}
+      region: ${AWS_REGION:us-east-1}
+      instance: ${HOSTNAME:localhost}
+  
+  # JMX configuration
+  jmx:
+    exposure:
+      include: "*"
+  
+  # Tracing configuration for distributed tracing
+  tracing:
+    sampling:
+      probability: ${TRACING_SAMPLING_RATE:0.1}
+
+# Logging Configuration for Compliance and Audit Requirements
+logging:
+  # Root logging level
+  level:
+    root: ${LOG_LEVEL_ROOT:INFO}
+    # Application-specific logging levels
+    com.ufs.compliance: ${LOG_LEVEL_COMPLIANCE:DEBUG}
+    com.ufs.common: ${LOG_LEVEL_COMMON:INFO}
+    # Framework logging levels
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.kafka: INFO
+    org.hibernate: INFO
+    org.hibernate.SQL: ${LOG_LEVEL_SQL:WARN}
+    org.hibernate.type.descriptor.sql.BasicBinder: ${LOG_LEVEL_SQL_PARAMS:WARN}
+    # Third-party libraries
+    com.zaxxer.hikari: INFO
+    org.apache.kafka: INFO
+    redis.clients.jedis: INFO
+    # Eureka client logging
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+  
+  # Logging pattern for structured logging
+  pattern:
+    # Console pattern with timestamp, level, thread, logger, and message
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %highlight(%-5level) %cyan(%logger{36}) - %msg%n"
+    # File pattern with additional correlation ID for audit trail
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{correlationId:-}] %logger{36} - %msg%n"
+  
+  # File logging configuration
+  file:
+    name: ${LOG_FILE_PATH:logs/compliance-service.log}
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+  
+  # Logback configuration reference
+  config: ${LOGBACK_CONFIG:classpath:logback-spring.xml}
+
+# Security Configuration for Financial Services Compliance
+security:
+  # JWT Configuration for microservices authentication
+  jwt:
+    # Secret key for JWT signing (use strong key in production from environment)
+    secret: ${JWT_SECRET:defaultSecretKeyForUFSPlatform2024CompliantWithSecurityStandards}
+    # JWT issuer identification
+    issuer: ${JWT_ISSUER:ufs-auth-service}
+    # Token expiration time (24 hours)
+    expiration-ms: ${JWT_EXPIRATION:86400000}
+    # Refresh token expiration (7 days)
+    refresh-expiration-ms: ${JWT_REFRESH_EXPIRATION:604800000}
+    # Algorithm for JWT signing
+    algorithm: ${JWT_ALGORITHM:HS512}
+    # Audience claim for JWT
+    audience: ${JWT_AUDIENCE:ufs-microservices}
+  
+  # OAuth2 Resource Server Configuration
+  oauth2:
+    resource-server:
+      jwt:
+        issuer-uri: ${OAUTH2_ISSUER_URI:http://localhost:8080/auth/realms/ufs}
+        jwk-set-uri: ${OAUTH2_JWK_SET_URI:http://localhost:8080/auth/realms/ufs/protocol/openid_connect/certs}
+  
+  # CORS Configuration for web security
+  cors:
+    allowed-origins: ${CORS_ALLOWED_ORIGINS:http://localhost:3000,http://localhost:8080}
+    allowed-methods: ${CORS_ALLOWED_METHODS:GET,POST,PUT,DELETE,OPTIONS,PATCH}
+    allowed-headers: ${CORS_ALLOWED_HEADERS:*}
+    allow-credentials: ${CORS_ALLOW_CREDENTIALS:true}
+    max-age: ${CORS_MAX_AGE:3600}
+
+# Application-Specific Configuration
+app:
+  # Compliance-specific settings
+  compliance:
+    # Regulatory update processing configuration
+    regulatory:
+      update-frequency: ${REGULATORY_UPDATE_FREQUENCY:300000} # 5 minutes
+      batch-size: ${REGULATORY_BATCH_SIZE:100}
+      max-retry-attempts: ${REGULATORY_MAX_RETRIES:3}
+      # Data retention for compliance records
+      data-retention-days: ${COMPLIANCE_DATA_RETENTION:2555} # 7 years
+    
+    # Audit configuration
+    audit:
+      enabled: ${AUDIT_ENABLED:true}
+      async: ${AUDIT_ASYNC:true}
+      batch-size: ${AUDIT_BATCH_SIZE:50}
+      flush-interval: ${AUDIT_FLUSH_INTERVAL:30000} # 30 seconds
+    
+    # Report generation settings
+    reports:
+      generation-timeout: ${REPORT_TIMEOUT:300000} # 5 minutes
+      max-concurrent-reports: ${MAX_CONCURRENT_REPORTS:5}
+      storage-path: ${REPORT_STORAGE_PATH:/var/lib/compliance/reports}
+    
+    # Threshold settings for compliance monitoring
+    thresholds:
+      risk-score-alert: ${RISK_SCORE_ALERT_THRESHOLD:80}
+      transaction-amount-review: ${TRANSACTION_REVIEW_THRESHOLD:10000}
+      suspicious-activity-score: ${SUSPICIOUS_ACTIVITY_THRESHOLD:75}
+  
+  # Cache configuration
+  cache:
+    # Cache TTL settings
+    default-ttl: ${CACHE_DEFAULT_TTL:3600} # 1 hour
+    regulatory-rules-ttl: ${CACHE_REGULATORY_TTL:1800} # 30 minutes
+    customer-profile-ttl: ${CACHE_CUSTOMER_TTL:900} # 15 minutes
+    # Cache sizes
+    max-entries: ${CACHE_MAX_ENTRIES:10000}
+    
+  # Circuit breaker configuration
+  circuit-breaker:
+    failure-rate-threshold: ${CIRCUIT_BREAKER_FAILURE_RATE:50}
+    wait-duration-in-open-state: ${CIRCUIT_BREAKER_WAIT_DURATION:30000}
+    sliding-window-size: ${CIRCUIT_BREAKER_SLIDING_WINDOW:10}
+    minimum-number-of-calls: ${CIRCUIT_BREAKER_MIN_CALLS:5}
+  
+  # Retry configuration
+  retry:
+    max-attempts: ${RETRY_MAX_ATTEMPTS:3}
+    backoff-delay: ${RETRY_BACKOFF_DELAY:1000}
+    max-delay: ${RETRY_MAX_DELAY:10000}
+  
+  # Rate limiting configuration
+  rate-limit:
+    enabled: ${RATE_LIMIT_ENABLED:true}
+    requests-per-minute: ${RATE_LIMIT_RPM:1000}
+    burst-capacity: ${RATE_LIMIT_BURST:100}
+
+# Monitoring and Alerting Configuration
+monitoring:
+  # Health check configuration
+  health:
+    db-timeout: ${HEALTH_DB_TIMEOUT:5000}
+    kafka-timeout: ${HEALTH_KAFKA_TIMEOUT:3000}
+    redis-timeout: ${HEALTH_REDIS_TIMEOUT:2000}
+  
+  # Alerting thresholds
+  alerts:
+    cpu-threshold: ${ALERT_CPU_THRESHOLD:80}
+    memory-threshold: ${ALERT_MEMORY_THRESHOLD:85}
+    disk-threshold: ${ALERT_DISK_THRESHOLD:90}
+    response-time-threshold: ${ALERT_RESPONSE_TIME:1000}
+    error-rate-threshold: ${ALERT_ERROR_RATE:5}
+
+# Thread Pool Configuration for Async Processing
+async:
+  # Core pool size for async operations
+  core-pool-size: ${ASYNC_CORE_POOL_SIZE:10}
+  # Maximum pool size for async operations
+  max-pool-size: ${ASYNC_MAX_POOL_SIZE:50}
+  # Queue capacity for async tasks
+  queue-capacity: ${ASYNC_QUEUE_CAPACITY:1000}
+  # Thread name prefix for identification
+  thread-name-prefix: ComplianceAsync-
+  # Keep alive time for threads
+  keep-alive-seconds: ${ASYNC_KEEP_ALIVE:60}
+
+# Custom Validation Configuration
+validation:
+  # Enable JSR-303 validation
+  enabled: true
+  # Fail fast on validation errors
+  fail-fast: true
+  # Custom validation messages
+  messages:
+    source: classpath:validation-messages.properties
+
+# Internationalization Configuration
+message:
+  # Message source configuration for multi-language support
+  source:
+    basename: messages,compliance-messages
+    encoding: UTF-8
+    cache-duration: 3600
+    use-code-as-default-message: true
+
+# Development and Testing Configuration
+debug:
+  # Enable debug mode (set to false in production)
+  enabled: ${DEBUG_ENABLED:false}
+  # Include debug information in responses
+  include-stacktrace: ${DEBUG_INCLUDE_STACKTRACE:never}
+  # Log request/response for debugging
+  log-request-details: ${DEBUG_LOG_REQUESTS:false}

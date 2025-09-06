@@ -1,0 +1,406 @@
+# Spring Cloud Config Server Configuration
+# Serves as the centralized configuration management system for the unified financial services platform
+# Supports multiple profiles for different environments (native, git, vault)
+# Addresses requirements: Centralized Configuration Management, Microservices Architecture
+
+server:
+  # Primary server configuration
+  port: 8888
+  # Enhanced server settings for production readiness
+  servlet:
+    context-path: /config
+  # Connection and timeout settings for financial services requirements
+  tomcat:
+    connection-timeout: 30s
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+  # Security headers for financial compliance
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+spring:
+  application:
+    name: config-server
+  
+  # Profile configuration for different environments
+  profiles:
+    active: native
+  
+  # Spring Cloud Config Server configuration
+  cloud:
+    config:
+      server:
+        # Git repository configuration for production environments
+        git:
+          uri: https://github.com/your-org/config-repo
+          clone-on-start: true
+          default-label: main
+          search-paths: '{application}'
+          # Enhanced git configuration for financial services
+          timeout: 10
+          force-pull: true
+          skip-ssl-validation: false
+          # Refresh rate for configuration changes
+          refresh-rate: 30
+          # Repository management
+          repos:
+            # Development configuration repository
+            development:
+              pattern: '*-dev,*-development'
+              uri: https://github.com/your-org/config-repo-dev
+              search-paths: '{application},shared/dev'
+            # Staging configuration repository  
+            staging:
+              pattern: '*-stage,*-staging'
+              uri: https://github.com/your-org/config-repo-staging
+              search-paths: '{application},shared/staging'
+            # Production configuration repository
+            production:
+              pattern: '*-prod,*-production'
+              uri: https://github.com/your-org/config-repo-prod
+              search-paths: '{application},shared/prod'
+          # Placeholder resolution for environment-specific values
+          placeholders:
+            environment: '{spring.profiles.active}'
+            application: '{spring.application.name}'
+        
+        # Native file system configuration for local development
+        native:
+          search-locations: 
+            - classpath:/config
+            - classpath:/config/{application}
+            - classpath:/config/{application}/{profile}
+            - file:./config
+            - file:./config/{application}
+          # Additional native configuration for flexibility
+          add-label-locations: true
+          fail-on-error: true
+        
+        # HashiCorp Vault integration for sensitive configuration
+        vault:
+          host: localhost
+          port: 8200
+          scheme: https
+          backend: secret
+          default-key: application
+          profile-separator: '/'
+          # Authentication configuration
+          authentication: TOKEN
+          token: ${VAULT_TOKEN:}
+          # SSL configuration for vault
+          ssl:
+            trust-store: ${VAULT_TRUSTSTORE:}
+            trust-store-password: ${VAULT_TRUSTSTORE_PASSWORD:}
+        
+        # Encryption configuration for sensitive data
+        encrypt:
+          enabled: true
+          key-store:
+            location: ${ENCRYPT_KEY_STORE_LOCATION:classpath:server.jks}
+            password: ${ENCRYPT_KEY_STORE_PASSWORD:letmein}
+            alias: ${ENCRYPT_KEY_STORE_ALIAS:mytestkey}
+            type: ${ENCRYPT_KEY_STORE_TYPE:JKS}
+        
+        # Health check configuration
+        health:
+          repositories:
+            enabled: true
+          
+        # Configuration for overriding client configurations
+        overrides:
+          # Global overrides for all applications
+          eureka:
+            client:
+              enabled: true
+              service-url:
+                defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+          # Logging overrides for consistent logging across microservices
+          logging:
+            level:
+              com.financial.platform: ${LOG_LEVEL:INFO}
+            pattern:
+              console: "%d{yyyy-MM-dd HH:mm:ss} - %msg%n"
+              file: "%d{yyyy-MM-dd HH:mm:ss} [%thread] %-5level %logger{36} - %msg%n"
+
+  # Security configuration for the config server
+  security:
+    user:
+      name: ${CONFIG_SERVER_USERNAME:configuser}
+      password: ${CONFIG_SERVER_PASSWORD:configpass}
+      roles: CONFIG_ADMIN,ACTUATOR
+    oauth2:
+      resource-server:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:}
+          jwk-set-uri: ${JWT_JWK_SET_URI:}
+
+  # Spring Boot Admin integration for monitoring
+  boot:
+    admin:
+      client:
+        url: ${SPRING_BOOT_ADMIN_URL:http://localhost:9090}
+        instance:
+          name: ${spring.application.name}
+          service-base-url: http://localhost:${server.port}
+
+# Management endpoints configuration for monitoring and operations
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,env,beans,configprops,mappings,metrics,prometheus,refresh,bus-refresh
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      roles: CONFIG_ADMIN
+    env:
+      show-values: when-authorized
+      roles: CONFIG_ADMIN
+    configprops:
+      show-values: when-authorized
+      roles: CONFIG_ADMIN
+    refresh:
+      enabled: true
+    bus-refresh:
+      enabled: true
+  
+  # Metrics configuration for monitoring
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+      jmx:
+        enabled: true
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active}
+      service: config-server
+  
+  # Health indicators
+  health:
+    diskspace:
+      enabled: true
+      threshold: 10GB
+    redis:
+      enabled: false # Enable if using Redis for bus refresh
+    rabbit:
+      enabled: false # Enable if using RabbitMQ for bus refresh
+
+# Logging configuration for financial services compliance
+logging:
+  level:
+    org.springframework.cloud.config: INFO
+    org.springframework.security: INFO
+    org.springframework.web: INFO
+    com.financial.platform: INFO
+    # Git repository operations logging
+    org.eclipse.jgit: WARN
+    # Security audit logging
+    org.springframework.security.web.access: INFO
+  pattern:
+    # Structured logging pattern for audit requirements
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-},%X{spanId:-}] %-5level %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] [%X{traceId:-},%X{spanId:-}] %-5level %logger{36} - %msg%n"
+  file:
+    name: ${LOG_FILE_PATH:./logs/${spring.application.name}.log}
+    max-size: 100MB
+    max-history: 30
+  logback:
+    rollingpolicy:
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB
+
+# Eureka client configuration for service discovery
+eureka:
+  client:
+    enabled: ${EUREKA_CLIENT_ENABLED:true}
+    service-url:
+      defaultZone: ${EUREKA_SERVER_URL:http://localhost:8761/eureka}
+    register-with-eureka: true
+    fetch-registry: true
+    healthcheck:
+      enabled: true
+  instance:
+    instance-id: ${spring.application.name}:${spring.application.instance-id:${random.value}}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: ${project.version:1.0.0}
+      description: "Spring Cloud Config Server for Financial Services Platform"
+      management.context-path: ${management.endpoints.web.base-path}
+
+# Environment-specific configuration profiles
+---
+# Development profile configuration
+spring:
+  config:
+    activate:
+      on-profile: development
+  cloud:
+    config:
+      server:
+        native:
+          search-locations: 
+            - classpath:/config/dev
+            - file:./config/dev
+        git:
+          uri: https://github.com/your-org/config-repo-dev
+          default-label: develop
+          clone-on-start: true
+
+logging:
+  level:
+    root: INFO
+    org.springframework.cloud.config: DEBUG
+    com.financial.platform: DEBUG
+
+---
+# Staging profile configuration  
+spring:
+  config:
+    activate:
+      on-profile: staging
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/your-org/config-repo-staging
+          default-label: staging
+          clone-on-start: true
+          force-pull: true
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+
+---
+# Production profile configuration
+spring:
+  config:
+    activate:
+      on-profile: production
+  cloud:
+    config:
+      server:
+        git:
+          uri: https://github.com/your-org/config-repo-prod
+          default-label: main
+          clone-on-start: true
+          force-pull: true
+          timeout: 10
+          refresh-rate: 60
+        # Enable encryption in production
+        encrypt:
+          enabled: true
+          fail-on-error: true
+
+# Production security settings
+  security:
+    oauth2:
+      resource-server:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI}
+          jwk-set-uri: ${JWT_JWK_SET_URI}
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+  endpoint:
+    health:
+      show-details: never
+    env:
+      show-values: never
+    configprops:
+      show-values: never
+
+logging:
+  level:
+    root: WARN
+    org.springframework.cloud.config: INFO
+    com.financial.platform: INFO
+    org.springframework.security.web.access: INFO
+
+# Server performance tuning for production
+server:
+  tomcat:
+    max-connections: 8192
+    accept-count: 1000
+    threads:
+      max: 400
+      min-spare: 25
+
+---
+# Docker profile configuration
+spring:
+  config:
+    activate:
+      on-profile: docker
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI}
+          username: ${CONFIG_REPO_USERNAME:}
+          password: ${CONFIG_REPO_PASSWORD:}
+          default-label: ${CONFIG_REPO_BRANCH:main}
+
+eureka:
+  client:
+    service-url:
+      defaultZone: http://eureka-server:8761/eureka
+  instance:
+    prefer-ip-address: false
+    hostname: config-server
+
+---
+# Kubernetes profile configuration
+spring:
+  config:
+    activate:
+      on-profile: kubernetes
+  cloud:
+    config:
+      server:
+        git:
+          uri: ${CONFIG_REPO_URI}
+          username: ${CONFIG_REPO_USERNAME:}
+          password: ${CONFIG_REPO_PASSWORD:}
+          default-label: ${CONFIG_REPO_BRANCH:main}
+        health:
+          repositories:
+            enabled: true
+
+# Kubernetes-specific configurations
+management:
+  endpoint:
+    health:
+      probes:
+        enabled: true
+  health:
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+
+server:
+  shutdown: graceful
+
+spring:
+  lifecycle:
+    timeout-per-shutdown-phase: 30s

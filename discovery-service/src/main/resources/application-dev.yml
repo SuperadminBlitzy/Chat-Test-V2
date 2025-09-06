@@ -1,0 +1,382 @@
+# Development Configuration for Discovery Service
+# This configuration overrides application.yml settings for local development environment
+# Optimized for Docker Compose setup and local debugging
+
+# Server Configuration - Development Optimizations
+server:
+  port: 8761
+  servlet:
+    context-path: /
+  # Disable compression for development to aid debugging
+  compression:
+    enabled: false
+  # Disable HTTP/2 for simpler local development
+  http2:
+    enabled: false
+  # Enhanced error details for development debugging
+  error:
+    whitelabel:
+      enabled: true
+    include-stacktrace: always
+    include-message: always
+    include-binding-errors: always
+
+# Spring Configuration - Development Specific
+spring:
+  application:
+    name: discovery-service
+  
+  # Simplified security for local development
+  security:
+    user:
+      name: admin
+      password: admin123
+  
+  # H2 in-memory database for development simplicity
+  datasource:
+    url: jdbc:h2:mem:discovery_dev
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+    # H2 console enabled for development debugging
+    h2:
+      console:
+        enabled: true
+        path: /h2-console
+        settings:
+          web-allow-others: true
+    hikari:
+      # Reduced pool size for development
+      minimum-idle: 1
+      maximum-pool-size: 3
+      idle-timeout: 300000
+      connection-timeout: 20000
+      leak-detection-threshold: 60000
+  
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        dialect: org.hibernate.dialect.H2Dialect
+        use_sql_comments: true
+  
+  # Development profile activation
+  profiles:
+    active: development
+  
+  # Cloud configuration for development
+  cloud:
+    loadbalancer:
+      enabled: true
+    discovery:
+      enabled: true
+
+# Eureka Configuration - Development Environment
+eureka:
+  instance:
+    hostname: localhost
+    prefer-ip-address: false
+    ip-address: 127.0.0.1
+    instance-id: ${spring.application.name}:${spring.application.instance_id:${server.port}}
+    # Faster lease renewal for development
+    lease-renewal-interval-in-seconds: 5
+    lease-expiration-duration-in-seconds: 10
+    metadata-map:
+      zone: development
+      version: dev-snapshot
+      environment: development
+      startup: ${eureka.instance.instanceId}
+  
+  client:
+    # Standalone discovery server - don't register with itself
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: http://${eureka.instance.hostname}:${server.port}/eureka/
+    # Faster intervals for development
+    registry-fetch-interval-seconds: 3
+    instance-info-replication-interval-seconds: 3
+    initial-instance-info-replication-interval-seconds: 3
+    eureka-service-url-poll-interval-seconds: 30
+    eureka-server-read-timeout-seconds: 5
+    eureka-server-connect-timeout-seconds: 3
+    # Reduced connection limits for development
+    eureka-server-total-connections: 50
+    eureka-server-total-connections-per-host: 20
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 1
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 1
+    cache-refresh-executor-exponential-back-off-bound: 10
+  
+  server:
+    # Disable self-preservation for development - immediate eviction
+    enable-self-preservation: false
+    wait-time-in-ms-when-sync-empty: 0
+    # Faster cache updates for development
+    response-cache-auto-expiration-in-seconds: 30
+    response-cache-update-interval-ms: 10000
+    use-read-only-response-cache: false
+    
+    # Development-optimized eviction settings
+    eviction-interval-timer-in-ms: 5000
+    renewal-percent-threshold: 0.49
+    renewal-threshold-update-interval-ms: 30000
+    expected-client-renewal-interval-seconds: 30
+    min-threads-for-status-replication: 1
+    max-threads-for-status-replication: 1
+    max-idle-thread-in-minutes-age-for-status-replication: 5
+    batch-size: 1
+    
+    # Disable rate limiting for development
+    rate-limiter-enabled: false
+    
+    # Peer replication settings - minimal for single instance
+    peer-eureka-nodes-update-interval-ms: 300000
+    peer-eureka-status-refresh-time-interval-ms: 15000
+    number-of-replication-retries: 2
+    peer-node-read-timeout-ms: 1000
+    peer-node-connect-timeout-ms: 1000
+    peer-node-total-connections: 100
+    peer-node-total-connections-per-host: 50
+    peer-node-connection-idle-timeout-seconds: 30
+
+# Management Endpoints - Enhanced for Development
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose all endpoints for development debugging
+        include: '*'
+      base-path: /actuator
+      path-mapping:
+        prometheus: /metrics
+    enabled-by-default: true
+  
+  endpoint:
+    health:
+      enabled: true
+      show-details: always
+      show-components: always
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    eureka:
+      enabled: true
+    env:
+      enabled: true
+      show-values: always
+    configprops:
+      enabled: true
+      show-values: always
+    beans:
+      enabled: true
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true
+    # Additional development endpoints
+    loggers:
+      enabled: true
+    conditions:
+      enabled: true
+    mappings:
+      enabled: true
+    scheduledtasks:
+      enabled: true
+  
+  health:
+    defaults:
+      enabled: true
+    eureka:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 10MB
+    db:
+      enabled: true
+  
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+    git:
+      enabled: true
+    build:
+      enabled: true
+  
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        descriptions: true
+        step: 5s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        eureka.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.9, 0.95, 0.99
+        eureka.server.requests: 0.5, 0.75, 0.9, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
+      environment: development
+      version: dev-snapshot
+      instance: ${eureka.instance.instance-id}
+    web:
+      server:
+        auto-time-requests: true
+
+# Development Logging Configuration
+logging:
+  level:
+    root: INFO
+    # Enhanced debugging for Eureka components
+    com.netflix.eureka: DEBUG
+    com.netflix.discovery: DEBUG
+    com.ufs.discovery: DEBUG
+    org.springframework.cloud.netflix.eureka: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.web: DEBUG
+    org.hibernate: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.boot.actuate: DEBUG
+    # Development-specific loggers
+    org.springframework.boot.autoconfigure: INFO
+    org.springframework.boot.web: DEBUG
+    org.springframework.cloud: DEBUG
+  
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  
+  # Development log file configuration
+  file:
+    name: ./logs/discovery-service-dev.log
+    max-size: 10MB
+    max-history: 5
+    total-size-cap: 50MB
+  
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+      max-file-size: 10MB
+      max-history: 5
+      total-size-cap: 50MB
+
+# Application Configuration - Development Environment
+app:
+  name: ${spring.application.name}
+  version: dev-snapshot
+  description: "Discovery Service for Financial Services Platform - Development Environment"
+  environment: development
+  
+  # Relaxed security for development
+  security:
+    enabled: false
+    cors:
+      enabled: true
+      allowed-origins: 
+        - http://localhost:3000
+        - http://localhost:8080
+        - http://localhost:8081
+        - http://127.0.0.1:3000
+        - http://127.0.0.1:8080
+        - http://127.0.0.1:8081
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS,HEAD,PATCH
+      allowed-headers: "*"
+      allow-credentials: true
+      max-age: 3600
+    
+    # Disabled rate limiting for development
+    rate-limit:
+      enabled: false
+  
+  # Development monitoring configuration
+  monitoring:
+    enabled: true
+    metrics:
+      enabled: true
+      jvm: true
+      system: true
+      custom: true
+    tracing:
+      enabled: false  # Disabled for simpler development
+  
+  # Single instance for development
+  ha:
+    enabled: false
+    cluster-size: 1
+  
+  # Development-optimized performance settings
+  performance:
+    cache:
+      enabled: false  # Disabled for development consistency
+    connection-pool:
+      min-idle: 1
+      max-active: 10
+      max-wait: 5000
+    thread-pool:
+      core-size: 2
+      max-size: 10
+      queue-capacity: 100
+
+# Feature flags - Development settings
+features:
+  enhanced-security: false
+  metrics-collection: true
+  distributed-tracing: false
+  rate-limiting: false
+  audit-logging: false
+
+# Development-specific additional configuration
+dev:
+  # Auto-refresh configuration
+  refresh:
+    enabled: true
+    interval: 30s
+  
+  # Development tools
+  tools:
+    h2-console: true
+    debug-actuator: true
+    detailed-logging: true
+  
+  # Docker Compose integration
+  docker:
+    network: discovery-network
+    container-name: discovery-service-dev
+  
+  # Development database seeding
+  data:
+    seed: true
+    reset-on-restart: true
+
+# Override any production SSL settings for development
+server:
+  ssl:
+    enabled: false
+
+# Development-specific Spring Boot configuration
+spring:
+  devtools:
+    restart:
+      enabled: true
+      additional-paths: src/main/java
+    livereload:
+      enabled: true
+  
+  # Development JMX configuration
+  jmx:
+    enabled: true
+    default-domain: discovery-service-dev

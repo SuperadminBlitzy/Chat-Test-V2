@@ -1,0 +1,469 @@
+# Production Configuration for Discovery Service (Eureka Server)
+# Unified Financial Services Platform - Production Environment
+# Overrides base application.yml settings for production deployment
+# Implements high availability, security, and compliance requirements
+
+# Server Configuration - Production Optimized
+server:
+  port: 8761
+  servlet:
+    context-path: /
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
+  http2:
+    enabled: true
+  
+  # Production SSL/TLS Configuration
+  ssl:
+    enabled: true
+    key-store: ${SSL_KEY_STORE:/etc/ssl/certs/discovery-service.p12}
+    key-store-password: ${SSL_KEY_STORE_PASSWORD}
+    key-store-type: PKCS12
+    trust-store: ${SSL_TRUST_STORE:/etc/ssl/certs/truststore.p12}
+    trust-store-password: ${SSL_TRUST_STORE_PASSWORD}
+    protocol: TLS
+    enabled-protocols: TLSv1.2,TLSv1.3
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-RSA-AES128-GCM-SHA256
+  
+  # Security Headers for Financial Services
+  error:
+    whitelabel:
+      enabled: false
+    include-stacktrace: never
+    include-message: never
+    include-binding-errors: never
+  
+  # Connection and Threading Configuration
+  tomcat:
+    max-connections: 10000
+    max-threads: 200
+    min-spare-threads: 10
+    connection-timeout: 20000
+    max-http-header-size: 8192
+    max-http-post-size: 2097152
+    accept-count: 100
+    processor-cache: 200
+
+# Spring Framework Configuration - Production
+spring:
+  application:
+    name: discovery-service
+  
+  # Production Security Configuration
+  security:
+    user:
+      name: ${DISCOVERY_USER:admin}
+      password: ${DISCOVERY_PASSWORD}
+      roles: ADMIN,ACTUATOR
+    
+    # Enhanced security for financial services
+    headers:
+      frame-options: DENY
+      content-type-options: nosniff
+      xss-protection: 1; mode=block
+      referrer-policy: strict-origin-when-cross-origin
+      content-security-policy: "default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; font-src 'self'"
+    
+    # Session management for production
+    session:
+      store-type: redis
+      timeout: 1800s
+      redis:
+        namespace: eureka:session
+        flush-mode: on_save
+  
+  # Production Database Configuration
+  datasource:
+    url: ${POSTGRES_URL:jdbc:postgresql://postgres-discovery:5432/discovery_db}
+    username: ${POSTGRES_USERNAME:discovery_user}
+    password: ${POSTGRES_PASSWORD}
+    driver-class-name: org.postgresql.Driver
+    
+    # Production-grade connection pool
+    hikari:
+      minimum-idle: 5
+      maximum-pool-size: 20
+      idle-timeout: 300000
+      connection-timeout: 20000
+      max-lifetime: 1200000
+      leak-detection-threshold: 60000
+      pool-name: DiscoveryServiceCP
+      connection-test-query: SELECT 1
+      auto-commit: false
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+  
+  # JPA Configuration for Production
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    open-in-view: false
+    properties:
+      hibernate:
+        format_sql: false
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        jdbc.batch_size: 20
+        order_inserts: true
+        order_updates: true
+        cache.use_second_level_cache: true
+        cache.use_query_cache: true
+        cache.region.factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        generate_statistics: true
+  
+  # Redis Configuration for Caching and Sessions
+  data:
+    redis:
+      host: ${REDIS_HOST:redis-discovery}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+      database: 0
+      timeout: 2000ms
+      ssl: ${REDIS_SSL_ENABLED:false}
+      jedis:
+        pool:
+          max-active: 50
+          max-idle: 10
+          min-idle: 2
+          max-wait: 2000ms
+
+# Eureka Server Configuration - Production High Availability
+eureka:
+  instance:
+    hostname: ${DISCOVERY_HOSTNAME:discovery-service.ufs.com}
+    prefer-ip-address: false
+    ip-address: ${DISCOVERY_IP_ADDRESS}
+    instance-id: ${spring.application.name}:${HOSTNAME:${random.value}}
+    lease-renewal-interval-in-seconds: 10
+    lease-expiration-duration-in-seconds: 30
+    status-page-url-path: /actuator/info
+    health-check-url-path: /actuator/health
+    
+    # Production metadata
+    metadata-map:
+      zone: ${EUREKA_ZONE:production}
+      version: ${BUILD_VERSION:1.0.0}
+      environment: production
+      startup: ${eureka.instance.instanceId}
+      region: ${AWS_REGION:us-east-1}
+      availability-zone: ${AWS_AZ:us-east-1a}
+  
+  client:
+    register-with-eureka: false
+    fetch-registry: false
+    service-url:
+      defaultZone: ${EUREKA_DEFAULT_ZONE:https://${eureka.instance.hostname}:${server.port}/eureka/}
+    
+    # Optimized for production performance
+    registry-fetch-interval-seconds: 10
+    instance-info-replication-interval-seconds: 10
+    initial-instance-info-replication-interval-seconds: 10
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-read-timeout-seconds: 8
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-total-connections: 1000
+    eureka-server-total-connections-per-host: 100
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 5
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 5
+    cache-refresh-executor-exponential-back-off-bound: 10
+    
+    # Security configuration
+    should-enforce-registration-at-init: true
+    should-disable-delta: false
+  
+  server:
+    # High availability and performance settings
+    enable-self-preservation: true
+    self-preservation-renewal-percent-threshold: 0.85
+    wait-time-in-ms-when-sync-empty: 0
+    response-cache-auto-expiration-in-seconds: 180
+    response-cache-update-interval-ms: 30000
+    use-read-only-response-cache: true
+    
+    # Enhanced peer replication for production cluster
+    peer-eureka-nodes-update-interval-ms: 600000
+    peer-eureka-status-refresh-time-interval-ms: 30000
+    number-of-replication-retries: 5
+    peer-node-read-timeout-ms: 200
+    peer-node-connect-timeout-ms: 200
+    peer-node-total-connections: 1000
+    peer-node-total-connections-per-host: 500
+    peer-node-connection-idle-timeout-seconds: 30
+    
+    # Registry optimization for financial services load
+    eviction-interval-timer-in-ms: 60000
+    renewal-percent-threshold: 0.85
+    renewal-threshold-update-interval-ms: 900000
+    expected-client-renewal-interval-seconds: 30
+    min-threads-for-status-replication: 1
+    max-threads-for-status-replication: 5
+    max-idle-thread-in-minutes-age-for-status-replication: 10
+    batch-size: 1
+    
+    # Production rate limiting
+    rate-limiter-enabled: true
+    rate-limiter-burst-size: 50
+    rate-limiter-registry-fetch-average-rate: 1000
+    rate-limiter-full-fetch-average-rate: 200
+    rate-limiter-privileged-clients: "financial-service,payment-service,user-service"
+    
+    # Production optimization features
+    experimental:
+      enable-compression: true
+
+# Management and Monitoring - Production Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus
+      base-path: /actuator
+      path-mapping:
+        prometheus: /metrics
+    enabled-by-default: false
+  
+  endpoint:
+    health:
+      enabled: true
+      show-details: never
+      show-components: never
+      cache:
+        time-to-live: 10s
+    info:
+      enabled: true
+      cache:
+        time-to-live: 30s
+    metrics:
+      enabled: true
+      cache:
+        time-to-live: 5s
+    prometheus:
+      enabled: true
+      cache:
+        time-to-live: 5s
+  
+  # Health checks for production
+  health:
+    defaults:
+      enabled: true
+    eureka:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 1GB
+    db:
+      enabled: true
+    redis:
+      enabled: true
+    livenessState:
+      enabled: true
+    readinessState:
+      enabled: true
+  
+  # Production info configuration
+  info:
+    env:
+      enabled: false
+    java:
+      enabled: true
+    os:
+      enabled: false
+    git:
+      enabled: true
+      mode: full
+    build:
+      enabled: true
+  
+  # Production metrics configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        descriptions: false
+        step: 30s
+        pushgateway:
+          enabled: false
+    
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        eureka.server.requests: true
+      percentiles:
+        http.server.requests: 0.95, 0.99
+        eureka.server.requests: 0.95, 0.99
+      slo:
+        http.server.requests: 100ms,500ms,1s,2s
+    
+    tags:
+      application: ${spring.application.name}
+      environment: production
+      version: ${BUILD_VERSION:1.0.0}
+      instance: ${eureka.instance.instance-id}
+      region: ${AWS_REGION:us-east-1}
+      zone: ${EUREKA_ZONE:production}
+    
+    web:
+      server:
+        auto-time-requests: true
+        requests-metric-name: http_server_requests
+
+# Production Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.netflix.eureka: INFO
+    com.netflix.discovery: INFO
+    org.springframework.cloud.netflix.eureka: WARN
+    org.springframework.security: WARN
+    org.springframework.web: WARN
+    org.hibernate: WARN
+    org.springframework.boot.actuate: WARN
+    # Financial services audit logging
+    audit: INFO
+    security: WARN
+    performance: INFO
+    
+    # Hide sensitive information in production
+    org.springframework.security.web: ERROR
+    org.springframework.boot.autoconfigure: ERROR
+  
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  
+  # Production log file configuration
+  file:
+    name: ${LOG_FILE:/var/log/discovery-service/discovery-service.log}
+    max-size: 100MB
+    max-history: 60
+    total-size-cap: 10GB
+  
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+      max-file-size: 100MB
+      max-history: 60
+      total-size-cap: 10GB
+
+# Production Application Configuration
+app:
+  name: ${spring.application.name}
+  version: ${BUILD_VERSION:1.0.0}
+  description: "Production Discovery Service for Unified Financial Services Platform"
+  environment: production
+  
+  # Production security settings
+  security:
+    enabled: true
+    
+    # CORS configuration for production
+    cors:
+      enabled: ${CORS_ENABLED:false}
+      allowed-origins: ${CORS_ALLOWED_ORIGINS:}
+      allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+      allowed-headers: Authorization,Content-Type,X-Requested-With,Accept,Origin,Access-Control-Request-Method,Access-Control-Request-Headers
+      allow-credentials: false
+      max-age: 3600
+    
+    # Production rate limiting
+    rate-limit:
+      enabled: true
+      requests-per-minute: 6000
+      burst-capacity: 1000
+      excluded-paths: /actuator/health,/actuator/info
+  
+  # Production monitoring configuration
+  monitoring:
+    enabled: true
+    metrics:
+      enabled: true
+      jvm: true
+      system: true
+      custom: true
+      business: true
+    tracing:
+      enabled: ${TRACING_ENABLED:true}
+      sampling-rate: ${TRACING_SAMPLING_RATE:0.1}
+      service-name: ${spring.application.name}
+  
+  # High availability production settings
+  ha:
+    enabled: ${HA_ENABLED:true}
+    cluster-size: ${CLUSTER_SIZE:3}
+    peer-nodes: ${PEER_NODES:}
+    health-check-interval: 30s
+    failover-timeout: 60s
+  
+  # Production performance optimization
+  performance:
+    cache:
+      enabled: true
+      size: 50000
+      ttl: 300
+      provider: redis
+    
+    connection-pool:
+      min-idle: 5
+      max-active: 100
+      max-wait: 30000
+      validation-query: SELECT 1
+      test-on-borrow: true
+      test-while-idle: true
+    
+    thread-pool:
+      core-size: 20
+      max-size: 100
+      queue-capacity: 2000
+      keep-alive: 60s
+      thread-name-prefix: eureka-prod-
+
+# Production Feature Toggles
+features:
+  enhanced-security: true
+  metrics-collection: true
+  distributed-tracing: ${FEATURE_DISTRIBUTED_TRACING:true}
+  rate-limiting: true
+  audit-logging: true
+  ssl-enforcement: true
+  health-checks: true
+  circuit-breaker: ${FEATURE_CIRCUIT_BREAKER:true}
+
+# Production-specific overrides
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+
+# Additional production security
+server:
+  forward-headers-strategy: framework
+  use-forward-headers: true
+
+# Production Eureka dashboard security
+eureka:
+  dashboard:
+    enabled: ${EUREKA_DASHBOARD_ENABLED:false}
+    path: /dashboard
+
+# Production environment variables validation
+---
+spring:
+  config:
+    activate:
+      on-profile: prod
+    import: "optional:configserver:http://config-server:8888"
+
+# Ensure required environment variables are set
+management:
+  health:
+    env:
+      enabled: true
+      required-properties:
+        - DISCOVERY_PASSWORD
+        - POSTGRES_PASSWORD
+        - SSL_KEY_STORE_PASSWORD
+        - SSL_TRUST_STORE_PASSWORD
