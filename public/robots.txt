@@ -1,0 +1,26 @@
+User-agent: *
+Allow: /
+
+# Disallow API and authentication routes
+Disallow: /api/
+Disallow: /login
+Disallow: /register
+Disallow: /forgot-password
+Disallow: /reset-password/
+
+# Disallow user-specific dashboard and settings pages
+Disallow: /dashboard/
+Disallow: /analytics/
+Disallow: /blockchain/
+Disallow: /compliance/
+Disallow: /customer/
+Disallow: /financial-wellness/
+Disallow: /profile/
+Disallow: /risk-assessment/
+Disallow: /settings/
+Disallow: /transactions/
+
+# Disallow onboarding process
+Disallow: /onboarding/
+
+Sitemap: https://www.unifiedfinserve.com/sitemap.xml

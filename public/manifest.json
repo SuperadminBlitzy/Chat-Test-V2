@@ -1,0 +1,167 @@
+{
+  "name": "Unified Financial Services Platform",
+  "short_name": "UFS Platform",
+  "description": "A comprehensive solution designed to address the critical fragmentation challenges facing Banking, Financial Services, and Insurance (BFSI) institutions.",
+  "version": "1.0.0",
+  "manifest_version": 3,
+  "start_url": ".",
+  "scope": "/",
+  "display": "standalone",
+  "orientation": "portrait-primary",
+  "theme_color": "#2196f3",
+  "background_color": "#ffffff",
+  "categories": [
+    "finance",
+    "business",
+    "productivity",
+    "banking"
+  ],
+  "lang": "en-US",
+  "dir": "ltr",
+  "icons": [
+    {
+      "src": "favicon.ico",
+      "sizes": "64x64 32x32 24x24 16x16",
+      "type": "image/x-icon",
+      "purpose": "any"
+    },
+    {
+      "src": "assets/images/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/images/logo512.png",
+      "type": "image/png",
+      "sizes": "512x512",
+      "purpose": "maskable any"
+    },
+    {
+      "src": "assets/images/logo192.png",
+      "type": "image/png",
+      "sizes": "192x192",
+      "purpose": "monochrome"
+    }
+  ],
+  "screenshots": [
+    {
+      "src": "assets/images/screenshot-desktop.png",
+      "sizes": "1280x720",
+      "type": "image/png",
+      "form_factor": "wide",
+      "label": "Customer Dashboard - Desktop View"
+    },
+    {
+      "src": "assets/images/screenshot-mobile.png",
+      "sizes": "390x844",
+      "type": "image/png",
+      "form_factor": "narrow",
+      "label": "Mobile Banking Interface"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "Customer Dashboard",
+      "short_name": "Dashboard",
+      "description": "Access customer management dashboard",
+      "url": "/dashboard",
+      "icons": [
+        {
+          "src": "assets/images/dashboard-icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Risk Assessment",
+      "short_name": "Risk",
+      "description": "AI-powered risk assessment tools",
+      "url": "/risk-assessment",
+      "icons": [
+        {
+          "src": "assets/images/risk-icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Compliance Center",
+      "short_name": "Compliance",
+      "description": "Regulatory compliance monitoring",
+      "url": "/compliance",
+      "icons": [
+        {
+          "src": "assets/images/compliance-icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    },
+    {
+      "name": "Digital Onboarding",
+      "short_name": "Onboarding",
+      "description": "Customer onboarding platform",
+      "url": "/onboarding",
+      "icons": [
+        {
+          "src": "assets/images/onboarding-icon.png",
+          "sizes": "96x96",
+          "type": "image/png"
+        }
+      ]
+    }
+  ],
+  "related_applications": [
+    {
+      "platform": "play",
+      "url": "https://play.google.com/store/apps/details?id=com.ufs.platform",
+      "id": "com.ufs.platform"
+    },
+    {
+      "platform": "itunes",
+      "url": "https://apps.apple.com/app/ufs-platform/id123456789",
+      "id": "123456789"
+    }
+  ],
+  "prefer_related_applications": false,
+  "display_override": [
+    "window-controls-overlay",
+    "standalone",
+    "minimal-ui",
+    "browser"
+  ],
+  "protocol_handlers": [
+    {
+      "protocol": "web+ufsplatform",
+      "url": "/handle?type=%s"
+    }
+  ],
+  "file_handlers": [
+    {
+      "action": "/file-handler",
+      "accept": {
+        "application/pdf": [".pdf"],
+        "text/csv": [".csv"],
+        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"]
+      }
+    }
+  ],
+  "launch_handler": {
+    "client_mode": "navigate-existing"
+  },
+  "edge_side_panel": {
+    "preferred_width": 400
+  },
+  "handle_links": "preferred",
+  "iarc_rating_id": "e84b072d-71b3-4d3e-86ae-31a8ce4e53b7",
+  "permissions": [
+    "notifications",
+    "camera",
+    "geolocation"
+  ],
+  "id": "ufs-platform-pwa",
+  "capture_links": "new-client"
+}
