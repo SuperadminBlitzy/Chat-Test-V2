@@ -1,0 +1,146 @@
+[
+  {
+    "id": "user-retail-001",
+    "username": "retail_customer",
+    "password": "password123",
+    "email": "retail.customer@example.com",
+    "role": "Retail Banking Customer",
+    "firstName": "John",
+    "lastName": "Doe"
+  },
+  {
+    "id": "user-retail-002",
+    "username": "retail_customer_2",
+    "password": "password123",
+    "email": "retail.customer2@example.com",
+    "role": "Retail Banking Customer",
+    "firstName": "Sarah",
+    "lastName": "Johnson"
+  },
+  {
+    "id": "user-sme-001",
+    "username": "sme_client",
+    "password": "password123",
+    "email": "sme.client@example.com",
+    "role": "SME Client",
+    "firstName": "Michael",
+    "lastName": "Thompson"
+  },
+  {
+    "id": "user-sme-002",
+    "username": "sme_client_2",
+    "password": "password123",
+    "email": "sme.client2@example.com",
+    "role": "SME Client",
+    "firstName": "Emily",
+    "lastName": "Davis"
+  },
+  {
+    "id": "user-corporate-001",
+    "username": "corporate_client",
+    "password": "password123",
+    "email": "corporate.client@example.com",
+    "role": "Corporate Client",
+    "firstName": "David",
+    "lastName": "Wilson"
+  },
+  {
+    "id": "user-corporate-002",
+    "username": "corporate_client_2",
+    "password": "password123",
+    "email": "corporate.client2@example.com",
+    "role": "Corporate Client",
+    "firstName": "Lisa",
+    "lastName": "Anderson"
+  },
+  {
+    "id": "user-advisor-001",
+    "username": "financial_advisor",
+    "password": "password123",
+    "email": "financial.advisor@example.com",
+    "role": "Financial Advisor",
+    "firstName": "Jane",
+    "lastName": "Smith"
+  },
+  {
+    "id": "user-advisor-002",
+    "username": "financial_advisor_2",
+    "password": "password123",
+    "email": "financial.advisor2@example.com",
+    "role": "Financial Advisor",
+    "firstName": "Robert",
+    "lastName": "Miller"
+  },
+  {
+    "id": "user-relationship-001",
+    "username": "relationship_manager",
+    "password": "password123",
+    "email": "relationship.manager@example.com",
+    "role": "Relationship Manager",
+    "firstName": "Amanda",
+    "lastName": "Garcia"
+  },
+  {
+    "id": "user-relationship-002",
+    "username": "relationship_manager_2",
+    "password": "password123",
+    "email": "relationship.manager2@example.com",
+    "role": "Relationship Manager",
+    "firstName": "James",
+    "lastName": "Rodriguez"
+  },
+  {
+    "id": "user-compliance-001",
+    "username": "compliance_officer",
+    "password": "password123",
+    "email": "compliance.officer@example.com",
+    "role": "Compliance Officer",
+    "firstName": "Peter",
+    "lastName": "Jones"
+  },
+  {
+    "id": "user-compliance-002",
+    "username": "compliance_officer_2",
+    "password": "password123",
+    "email": "compliance.officer2@example.com",
+    "role": "Compliance Officer",
+    "firstName": "Jennifer",
+    "lastName": "Martinez"
+  },
+  {
+    "id": "user-risk-001",
+    "username": "risk_manager",
+    "password": "password123",
+    "email": "risk.manager@example.com",
+    "role": "Risk Manager",
+    "firstName": "Mary",
+    "lastName": "Williams"
+  },
+  {
+    "id": "user-risk-002",
+    "username": "risk_manager_2",
+    "password": "password123",
+    "email": "risk.manager2@example.com",
+    "role": "Risk Manager",
+    "firstName": "Christopher",
+    "lastName": "Brown"
+  },
+  {
+    "id": "user-admin-001",
+    "username": "admin",
+    "password": "password123",
+    "email": "admin@example.com",
+    "role": "System Administrator",
+    "firstName": "System",
+    "lastName": "Admin"
+  },
+  {
+    "id": "user-admin-002",
+    "username": "admin_2",
+    "password": "password123",
+    "email": "admin2@example.com",
+    "role": "System Administrator",
+    "firstName": "Thomas",
+    "lastName": "Taylor"
+  }
+]

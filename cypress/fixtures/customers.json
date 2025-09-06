@@ -1,0 +1,67 @@
+[
+  {
+    "id": "cus_1",
+    "personalInfo": {
+      "firstName": "John",
+      "lastName": "Doe",
+      "email": "john.doe@example.com",
+      "phone": "123-456-7890"
+    },
+    "kycStatus": "VERIFIED",
+    "riskProfile": {
+      "score": 250,
+      "category": "LOW"
+    },
+    "accounts": [
+      {
+        "accountId": "acc_101",
+        "accountType": "Checking",
+        "balance": 5432.10,
+        "currency": "USD"
+      },
+      {
+        "accountId": "acc_102",
+        "accountType": "Savings",
+        "balance": 12345.67,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "cus_2",
+    "personalInfo": {
+      "firstName": "Jane",
+      "lastName": "Smith",
+      "email": "jane.smith@example.com",
+      "phone": "098-765-4321"
+    },
+    "kycStatus": "PENDING",
+    "riskProfile": {
+      "score": 650,
+      "category": "MEDIUM"
+    },
+    "accounts": [
+      {
+        "accountId": "acc_201",
+        "accountType": "Investment",
+        "balance": 75000.00,
+        "currency": "USD"
+      }
+    ]
+  },
+  {
+    "id": "cus_3",
+    "personalInfo": {
+      "firstName": "Peter",
+      "lastName": "Jones",
+      "email": "peter.jones@example.com",
+      "phone": "555-555-5555"
+    },
+    "kycStatus": "REJECTED",
+    "riskProfile": {
+      "score": 850,
+      "category": "HIGH"
+    },
+    "accounts": []
+  }
+]
