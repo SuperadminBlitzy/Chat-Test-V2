@@ -1,0 +1,170 @@
+apiVersion: v2
+name: ufs-backend
+description: A Helm chart for deploying the backend microservices of the Unified Financial Services Platform
+type: application
+version: 0.1.0
+appVersion: "1.0.0"
+
+# Keywords reflecting the comprehensive technology stack and domain
+keywords:
+  - "financial-services"
+  - "backend"
+  - "microservices"
+  - "spring-boot"
+  - "kubernetes"
+  - "fintech"
+  - "banking"
+  - "risk-management"
+  - "compliance"
+  - "ai-ml"
+  - "blockchain"
+  - "data-integration"
+  - "real-time-processing"
+  - "enterprise"
+
+# Maintainer information for the platform team
+maintainers:
+  - name: "UFS Platform Team"
+    email: "devops@ufs.com"
+    url: "https://github.com/ufs-platform/backend"
+
+# Company/Organization branding
+icon: "https://www.ufs.com/logo.svg"
+home: "https://www.ufs.com"
+sources:
+  - "https://github.com/ufs-platform/backend"
+  - "https://github.com/ufs-platform/k8s-manifests"
+
+# Kubernetes version compatibility based on tech spec requirements
+kubeVersion: ">=1.28.0"
+
+# Chart annotations for enhanced metadata and compliance
+annotations:
+  # Artifact Hub specific annotations
+  artifacthub.io/category: "financial-services"
+  artifacthub.io/license: "Proprietary"
+  artifacthub.io/operator: "false"
+  artifacthub.io/prerelease: "false"
+  artifacthub.io/containsSecurityUpdates: "true"
+  artifacthub.io/changes: |
+    - kind: added
+      description: "Initial release of UFS backend microservices platform"
+    - kind: added
+      description: "Support for AI-powered risk assessment engine"
+    - kind: added
+      description: "Regulatory compliance automation features"
+    - kind: added
+      description: "Unified data integration platform"
+    - kind: added
+      description: "Digital customer onboarding capabilities"
+  
+  # Financial services specific annotations
+  financial-services.io/compliance-level: "enterprise"
+  financial-services.io/security-rating: "high"
+  financial-services.io/data-classification: "confidential"
+  financial-services.io/regulatory-frameworks: "PCI-DSS,SOC2,GDPR,Basel-III,FINRA"
+  
+  # Technical architecture annotations
+  architecture.io/pattern: "microservices"
+  architecture.io/communication: "event-driven"
+  architecture.io/data-consistency: "eventual"
+  architecture.io/deployment-strategy: "blue-green"
+  
+  # Operational annotations
+  ops.io/monitoring: "prometheus"
+  ops.io/logging: "elk-stack"
+  ops.io/tracing: "jaeger"
+  ops.io/service-mesh: "istio"
+  ops.io/gitops: "argocd"
+
+# Dependencies for core infrastructure components
+dependencies:
+  # Service mesh for secure communication
+  - name: istio-base
+    version: "1.19.x"
+    repository: "https://istio-release.storage.googleapis.com/charts"
+    condition: serviceMesh.enabled
+    tags:
+      - infrastructure
+      - security
+  
+  # API Gateway for external traffic management
+  - name: kong
+    version: "2.38.x"
+    repository: "https://charts.konghq.com"
+    condition: apiGateway.enabled
+    tags:
+      - infrastructure
+      - networking
+  
+  # Message broker for event-driven architecture
+  - name: kafka
+    version: "26.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: messaging.kafka.enabled
+    tags:
+      - infrastructure
+      - messaging
+  
+  # PostgreSQL for transactional data
+  - name: postgresql
+    version: "13.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: database.postgresql.enabled
+    tags:
+      - database
+      - transactional
+  
+  # MongoDB for document storage and analytics
+  - name: mongodb
+    version: "15.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: database.mongodb.enabled
+    tags:
+      - database
+      - analytics
+  
+  # Redis for caching and session storage
+  - name: redis
+    version: "18.x.x"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: cache.redis.enabled
+    tags:
+      - cache
+      - performance
+  
+  # Prometheus for monitoring and alerting
+  - name: kube-prometheus-stack
+    version: "56.x.x"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: monitoring.prometheus.enabled
+    tags:
+      - monitoring
+      - observability
+  
+  # ELK stack for centralized logging
+  - name: elasticsearch
+    version: "8.5.x"
+    repository: "https://helm.elastic.co"
+    condition: logging.elasticsearch.enabled
+    tags:
+      - logging
+      - observability
+  
+  # Jaeger for distributed tracing
+  - name: jaeger
+    version: "0.71.x"
+    repository: "https://jaegertracing.github.io/helm-charts"
+    condition: tracing.jaeger.enabled
+    tags:
+      - tracing
+      - observability
+
+# Engine compatibility for Helm
+engine: gotpl
+
+# Deprecated flag (false for active development)
+deprecated: false
+
+# Minimum Helm version required
+tillerVersion: ">=2.16.0"

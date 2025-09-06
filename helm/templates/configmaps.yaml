@@ -1,0 +1,455 @@
+{{/*
+Unified Financial Services Platform - ConfigMaps Template
+Version: Helm 3.13+
+
+This template generates Kubernetes ConfigMap resources for UFS microservices based on
+the service configurations defined in values.yaml. ConfigMaps provide centralized
+configuration management, allowing for environment-specific settings and Spring Cloud
+Config compatibility.
+
+The template iterates through all services defined in .Values.services and creates
+a ConfigMap for each service that has configmap.enabled set to true. This approach
+supports the microservices architecture by providing independent configuration
+management for each service while maintaining consistency across the platform.
+
+Key Features:
+- Environment-specific configuration support
+- Spring Boot application.yml generation
+- Centralized configuration management
+- Kubernetes-native configuration distribution
+- Support for Spring Cloud Config patterns
+*/}}
+
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if and $serviceConfig $serviceConfig.configmap $serviceConfig.configmap.enabled }}
+---
+{{/*
+ConfigMap for {{ $serviceName }} service
+Provides application configuration as Kubernetes-native ConfigMap
+which will be mounted into the service pods at runtime.
+*/}}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "ufs.fullname" $ }}-{{ $serviceName }}-config
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    {{- include "ufs.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+    ufs.platform/service-name: {{ $serviceName | quote }}
+    ufs.platform/config-type: "application"
+  annotations:
+    {{- include "ufs.annotations" $ | nindent 4 }}
+    ufs.platform/service-version: {{ $serviceConfig.image.tag | default "latest" | quote }}
+    ufs.platform/config-checksum: {{ toYaml $serviceConfig.configmap.data | sha256sum | quote }}
+    {{- if $serviceConfig.configmap.annotations }}
+    {{- toYaml $serviceConfig.configmap.annotations | nindent 4 }}
+    {{- end }}
+data:
+  {{/*
+  Primary application configuration file (application.yml)
+  This follows Spring Boot configuration conventions and provides
+  a comprehensive configuration structure for financial services applications.
+  */}}
+  application.yml: |
+    {{- if $serviceConfig.configmap.data }}
+    {{- toYaml $serviceConfig.configmap.data | nindent 4 }}
+    {{- else }}
+    {{/*
+    Default configuration structure for UFS microservices
+    Provides baseline configuration that can be overridden by values.yaml
+    */}}
+    # Unified Financial Services Platform - {{ $serviceName | title }} Service Configuration
+    # Environment: {{ $.Values.global.environment | default "production" }}
+    # Generated: {{ now | date "2006-01-02T15:04:05Z" }}
+    
+    server:
+      port: {{ $serviceConfig.service.targetPort | default 8080 }}
+      servlet:
+        context-path: /
+      shutdown: graceful
+      compression:
+        enabled: true
+        mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+        min-response-size: 1024
+      http2:
+        enabled: true
+      error:
+        include-message: never
+        include-binding-errors: never
+        include-stacktrace: never
+        include-exception: false
+    
+    spring:
+      application:
+        name: {{ $serviceName }}
+      profiles:
+        active: {{ $.Values.global.environment | default "production" }}
+      
+      {{- if eq $serviceName "config-server" }}
+      cloud:
+        config:
+          server:
+            git:
+              uri: {{ $serviceConfig.config.git.uri | default "https://github.com/ufs/config-repo" }}
+              searchPaths: {{ $serviceConfig.config.git.searchPaths | default "config/{application}/{profile}" }}
+              timeout: {{ $serviceConfig.config.git.timeout | default 10 }}
+              clone-on-start: true
+            health:
+              enabled: true
+      {{- else }}
+      cloud:
+        config:
+          uri: http://{{ include "ufs.fullname" $ }}-config-server:8888
+          fail-fast: true
+          retry:
+            initial-interval: 1000
+            max-attempts: 6
+            max-interval: 2000
+            multiplier: 1.1
+      {{- end }}
+      
+      {{- if ne $serviceName "discovery-service" }}
+      # Eureka Client Configuration (not applicable for discovery service itself)
+      eureka:
+        client:
+          serviceUrl:
+            defaultZone: http://{{ include "ufs.fullname" $ }}-discovery-service:8761/eureka/
+          fetch-registry: true
+          register-with-eureka: true
+          initial-instance-info-replication-interval-seconds: 5
+          instance-info-replication-interval-seconds: 5
+        instance:
+          prefer-ip-address: true
+          lease-renewal-interval-in-seconds: 5
+          lease-expiration-duration-in-seconds: 10
+          instance-id: ${spring.application.name}:${spring.application.instance_id:${random.value}}
+          metadata-map:
+            management.context-path: /actuator
+            health.path: /actuator/health
+            metrics.path: /actuator/prometheus
+      {{- end }}
+      
+      {{- if $serviceConfig.database }}
+      # Database Configuration
+      datasource:
+        url: jdbc:postgresql://{{ $serviceConfig.database.host | default $.Values.global.postgresql.host }}:{{ $serviceConfig.database.port | default $.Values.global.postgresql.port }}/{{ $serviceConfig.database.name }}
+        username: {{ $serviceConfig.database.username }}
+        password: ${DB_PASSWORD:}
+        driver-class-name: org.postgresql.Driver
+        hikari:
+          connection-timeout: {{ $.Values.global.postgresql.pool.timeout | default 30 }}000
+          maximum-pool-size: {{ $.Values.global.postgresql.pool.size | default 20 }}
+          max-lifetime: {{ $.Values.global.postgresql.pool.recycle | default 3600 }}000
+          leak-detection-threshold: 60000
+          pool-name: {{ $serviceName }}-pool
+          data-source-properties:
+            cachePrepStmts: true
+            prepStmtCacheSize: 250
+            prepStmtCacheSqlLimit: 2048
+      
+      jpa:
+        hibernate:
+          ddl-auto: validate
+          naming:
+            physical-strategy: org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy
+        show-sql: false
+        properties:
+          hibernate:
+            dialect: org.hibernate.dialect.PostgreSQLDialect
+            format_sql: true
+            generate_statistics: false
+            jdbc:
+              batch_size: 20
+              order_inserts: true
+              order_updates: true
+            cache:
+              use_second_level_cache: true
+              use_query_cache: true
+              region:
+                factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+      {{- end }}
+      
+      # Redis Configuration (if service uses caching)
+      {{- if or $serviceConfig.config.cache.enabled $.Values.global.redis }}
+      redis:
+        host: {{ $.Values.global.redis.host }}
+        port: {{ $.Values.global.redis.port }}
+        database: {{ $.Values.global.redis.database | default 0 }}
+        password: ${REDIS_PASSWORD:}
+        timeout: 2000ms
+        lettuce:
+          pool:
+            max-active: 20
+            max-idle: 8
+            min-idle: 2
+            max-wait: -1ms
+          shutdown-timeout: 100ms
+      {{- end }}
+      
+      # Kafka Configuration (for event-driven services)
+      {{- if $.Values.global.kafka }}
+      kafka:
+        bootstrap-servers: {{ $.Values.global.kafka.brokers }}
+        producer:
+          key-serializer: org.apache.kafka.common.serialization.StringSerializer
+          value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+          acks: all
+          retries: 2147483647
+          max-in-flight-requests-per-connection: 5
+          enable-idempotence: true
+          batch-size: 16384
+          linger-ms: 5
+        consumer:
+          group-id: {{ $serviceName }}-group
+          key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+          value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+          auto-offset-reset: earliest
+          enable-auto-commit: false
+          properties:
+            spring.json.trusted.packages: "com.ufs.platform"
+        listener:
+          ack-mode: manual_immediate
+      {{- end }}
+    
+    # Spring Boot Actuator Configuration
+    management:
+      endpoints:
+        web:
+          exposure:
+            include: health,info,metrics,prometheus,env,configprops
+          base-path: /actuator
+        enabled-by-default: false
+      endpoint:
+        health:
+          enabled: true
+          show-details: when-authorized
+          show-components: when-authorized
+        info:
+          enabled: true
+        metrics:
+          enabled: true
+        prometheus:
+          enabled: true
+        env:
+          enabled: true
+        configprops:
+          enabled: true
+      health:
+        circuitbreakers:
+          enabled: true
+        ratelimiters:
+          enabled: true
+      metrics:
+        tags:
+          application: {{ $serviceName }}
+          environment: {{ $.Values.global.environment | default "production" }}
+          version: {{ $serviceConfig.image.tag | default "latest" }}
+        export:
+          prometheus:
+            enabled: true
+            step: 30s
+    
+    # Logging Configuration
+    logging:
+      level:
+        root: {{ $.Values.logging.level.root | default "INFO" }}
+        com.ufs: {{ $.Values.logging.level.comUfs | default "INFO" }}
+        org.springframework.security: WARN
+        org.springframework.web: WARN
+        org.hibernate.SQL: WARN
+        org.hibernate.type.descriptor.sql.BasicBinder: WARN
+      pattern:
+        console: "%d{HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+        file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+      {{- if $.Values.logging.logstash.enabled }}
+      config: classpath:logback-spring.xml
+      {{- end }}
+    
+    {{- if $.Values.jaeger.enabled }}
+    # Distributed Tracing Configuration
+    opentracing:
+      jaeger:
+        http-sender:
+          url: {{ $.Values.jaeger.collector.endpoint }}
+        probabilistic-sampler:
+          sampling-rate: {{ $.Values.jaeger.sampling.param | default 0.1 }}
+    {{- end }}
+    
+    # Service-specific Configuration
+    {{- if eq $serviceName "auth-service" }}
+    # Authentication Service Specific Configuration
+    jwt:
+      secret: ${JWT_SECRET}
+      expiration: {{ $serviceConfig.config.jwt.expiration | default 3600 }}
+      refresh-expiration: {{ $serviceConfig.config.jwt.refreshExpiration | default 86400 }}
+    
+    security:
+      oauth2:
+        client:
+          registration: {}
+        resource-server:
+          jwt:
+            issuer-uri: http://{{ include "ufs.fullname" $ }}-auth-service:9000
+    {{- end }}
+    
+    {{- if eq $serviceName "api-gateway" }}
+    # API Gateway Specific Configuration
+    zuul:
+      routes:
+        auth-service:
+          path: /auth/**
+          service-id: auth-service
+          strip-prefix: false
+        customer-service:
+          path: /customers/**
+          service-id: customer-service
+          strip-prefix: false
+        transaction-service:
+          path: /transactions/**
+          service-id: transaction-service
+          strip-prefix: false
+      
+      ratelimit:
+        enabled: {{ $serviceConfig.config.rateLimit.enabled | default true }}
+        default-policy:
+          limit: {{ $serviceConfig.config.rateLimit.requestsPerSecond | default 1000 }}
+          refresh-interval: 60
+          type: origin
+    {{- end }}
+    
+    {{- if eq $serviceName "risk-assessment-service" }}
+    # Risk Assessment Service Specific Configuration
+    risk:
+      model:
+        path: {{ $serviceConfig.config.ml.modelPath | default "/models" }}
+        version: latest
+        batch-size: {{ $serviceConfig.config.ml.batchSize | default 32 }}
+        timeout: {{ $serviceConfig.config.ml.timeout | default 30000 }}
+      scoring:
+        threshold: {{ $serviceConfig.config.risk.scoreThreshold | default 0.75 }}
+        categories: {{ $serviceConfig.config.risk.categories | default "[\"low\", \"medium\", \"high\", \"critical\"]" }}
+    {{- end }}
+    
+    {{- if eq $serviceName "blockchain-service" }}
+    # Blockchain Service Specific Configuration  
+    hyperledger:
+      fabric:
+        version: {{ $serviceConfig.config.hyperledger.fabric.version | default "2.5" }}
+        channel-name: {{ $serviceConfig.config.hyperledger.fabric.channelName | default "financial-channel" }}
+        chaincode-name: {{ $serviceConfig.config.hyperledger.fabric.chaincodeName | default "financial-contract" }}
+        network:
+          organizations: {{ $serviceConfig.config.hyperledger.network.organizations | default 3 }}
+          peers-per-org: {{ $serviceConfig.config.hyperledger.network.peersPerOrg | default 2 }}
+    {{- end }}
+    
+    # Financial Services Platform Configuration
+    ufs:
+      platform:
+        version: {{ $.Chart.Version }}
+        environment: {{ $.Values.global.environment | default "production" }}
+        service-name: {{ $serviceName }}
+        namespace: {{ $.Release.Namespace }}
+        compliance:
+          {{- if $.Values.global.compliance.pci }}
+          pci-enabled: true
+          {{- end }}
+          {{- if $.Values.global.compliance.sox }}
+          sox-enabled: true
+          {{- end }}
+      security:
+        encryption:
+          algorithm: AES-256-GCM
+          key-rotation-interval: 24h
+        audit:
+          enabled: true
+          retention-days: 2555  # 7 years for financial compliance
+    {{- end }}
+  
+  {{/*
+  Additional Configuration Files
+  Services can define multiple configuration files beyond the main application.yml
+  */}}
+  {{- if $serviceConfig.configmap.additionalFiles }}
+  {{- range $fileName, $fileContent := $serviceConfig.configmap.additionalFiles }}
+  {{ $fileName }}: |
+    {{- if typeIs "string" $fileContent }}
+    {{- $fileContent | nindent 4 }}
+    {{- else }}
+    {{- toYaml $fileContent | nindent 4 }}
+    {{- end }}
+  {{- end }}
+  {{- end }}
+  
+  {{/*
+  Logback Configuration for Structured Logging
+  Provides JSON-formatted logging for financial services compliance and monitoring
+  */}}
+  {{- if $.Values.logging.logstash.enabled }}
+  logback-spring.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <configuration>
+        <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+        
+        <springProfile name="!local">
+            <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+                <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                    <providers>
+                        <timestamp/>
+                        <logLevel/>
+                        <loggerName/>
+                        <mdc/>
+                        <arguments/>
+                        <message/>
+                        <stackTrace/>
+                    </providers>
+                </encoder>
+            </appender>
+            
+            <appender name="LOGSTASH" class="net.logstash.logback.appender.LogstashTcpSocketAppender">
+                <destination>{{ $.Values.logging.logstash.host }}:{{ $.Values.logging.logstash.port }}</destination>
+                <encoder class="net.logstash.logback.encoder.LoggingEventCompositeJsonEncoder">
+                    <providers>
+                        <timestamp/>
+                        <version/>
+                        <logLevel/>
+                        <message/>
+                        <mdc/>
+                        <arguments/>
+                        <stackTrace/>
+                        <pattern>
+                            <pattern>
+                                {
+                                    "service": "{{ $serviceName }}",
+                                    "environment": "{{ $.Values.global.environment | default "production" }}",
+                                    "version": "{{ $serviceConfig.image.tag | default "latest" }}",
+                                    "namespace": "{{ $.Release.Namespace }}"
+                                }
+                            </pattern>
+                        </pattern>
+                    </providers>
+                </encoder>
+            </appender>
+            
+            <root level="{{ $.Values.logging.level.root | default "INFO" }}">
+                <appender-ref ref="STDOUT"/>
+                <appender-ref ref="LOGSTASH"/>
+            </root>
+        </springProfile>
+        
+        <springProfile name="local">
+            <appender name="STDOUT" class="ch.qos.logback.core.ConsoleAppender">
+                <encoder>
+                    <pattern>%d{HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n</pattern>
+                </encoder>
+            </appender>
+            
+            <root level="DEBUG">
+                <appender-ref ref="STDOUT"/>
+            </root>
+        </springProfile>
+    </configuration>
+  {{- end }}
+
+{{- end }}
+{{- end }}

@@ -1,0 +1,372 @@
+{{/*
+Unified Financial Services Platform - Microservices Deployments
+This template generates Kubernetes Deployment resources for all enabled microservices
+in the financial services platform, ensuring enterprise-grade security, scalability,
+and compliance with financial industry standards.
+*/}}
+
+{{/* Define the list of all microservices that can be deployed */}}
+{{- $services := list "api-gateway" "discovery-service" "config-server" "auth-service" "customer-service" "risk-assessment-service" "compliance-service" "transaction-service" "analytics-service" "financial-wellness-service" "ai-service" "blockchain-service" "notification-service" }}
+
+{{/* Iterate through each service and create a deployment if enabled */}}
+{{- range $serviceName := $services }}
+{{- $serviceConfig := index $.Values $serviceName }}
+{{- if and $serviceConfig $serviceConfig.enabled }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "ufs.fullname" $ }}-{{ $serviceName }}
+  namespace: {{ $.Release.Namespace | quote }}
+  labels:
+    {{- include "ufs.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+    ufs.platform/service-type: microservice
+    ufs.platform/service-tier: {{ $serviceConfig.tier | default "standard" }}
+    {{- if $serviceConfig.labels }}
+    {{- toYaml $serviceConfig.labels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- include "ufs.annotations" $ | nindent 4 }}
+    ufs.platform/service-name: {{ $serviceName | quote }}
+    ufs.platform/deployment-strategy: {{ $serviceConfig.strategy | default "RollingUpdate" | quote }}
+    {{- if $serviceConfig.annotations }}
+    {{- toYaml $serviceConfig.annotations | nindent 4 }}
+    {{- end }}
+spec:
+  replicas: {{ $serviceConfig.replicaCount | default $.Values.replicaCount | default 1 }}
+  strategy:
+    type: {{ $serviceConfig.strategy | default "RollingUpdate" }}
+    {{- if eq ($serviceConfig.strategy | default "RollingUpdate") "RollingUpdate" }}
+    rollingUpdate:
+      maxUnavailable: {{ $serviceConfig.rollingUpdate.maxUnavailable | default "25%" }}
+      maxSurge: {{ $serviceConfig.rollingUpdate.maxSurge | default "25%" }}
+    {{- end }}
+  selector:
+    matchLabels:
+      {{- include "ufs.selectorLabels" $ | nindent 6 }}
+      app.kubernetes.io/component: {{ $serviceName }}
+  template:
+    metadata:
+      labels:
+        {{- include "ufs.selectorLabels" $ | nindent 8 }}
+        app.kubernetes.io/component: {{ $serviceName }}
+        ufs.platform/service-name: {{ $serviceName }}
+        ufs.platform/service-tier: {{ $serviceConfig.tier | default "standard" }}
+        {{- if $serviceConfig.podLabels }}
+        {{- toYaml $serviceConfig.podLabels | nindent 8 }}
+        {{- end }}
+      annotations:
+        {{- if $.Values.podAnnotations }}
+        {{- toYaml $.Values.podAnnotations | nindent 8 }}
+        {{- end }}
+        {{- if $serviceConfig.podAnnotations }}
+        {{- toYaml $serviceConfig.podAnnotations | nindent 8 }}
+        {{- end }}
+        # Force pod recreation on config changes
+        checksum/config: {{ include (print $.Template.BasePath "/configmaps.yaml") $ | sha256sum }}
+        checksum/secret: {{ include (print $.Template.BasePath "/secrets.yaml") $ | sha256sum }}
+        # Financial services compliance annotations
+        ufs.platform/pci-scope: {{ $serviceConfig.compliance.pci | default "true" | quote }}
+        ufs.platform/sox-audit: {{ $serviceConfig.compliance.sox | default "true" | quote }}
+        ufs.platform/data-classification: {{ $serviceConfig.dataClassification | default "confidential" | quote }}
+    spec:
+      serviceAccountName: {{ include "ufs.serviceAccountName" $ }}-{{ $serviceName }}
+      securityContext:
+        {{- include "ufs.securityContext" $ | nindent 8 }}
+      {{- if or $.Values.imagePullSecrets $serviceConfig.image.pullSecrets }}
+      imagePullSecrets:
+        {{- if $.Values.imagePullSecrets }}
+        {{- toYaml $.Values.imagePullSecrets | nindent 8 }}
+        {{- end }}
+        {{- if $serviceConfig.image.pullSecrets }}
+        {{- toYaml $serviceConfig.image.pullSecrets | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if $serviceConfig.hostNetwork }}
+      hostNetwork: {{ $serviceConfig.hostNetwork }}
+      {{- end }}
+      {{- if $serviceConfig.dnsPolicy }}
+      dnsPolicy: {{ $serviceConfig.dnsPolicy }}
+      {{- end }}
+      {{- if $serviceConfig.priorityClassName }}
+      priorityClassName: {{ $serviceConfig.priorityClassName }}
+      {{- end }}
+      # Grace period for financial transactions to complete
+      terminationGracePeriodSeconds: {{ $serviceConfig.terminationGracePeriodSeconds | default 120 }}
+      containers:
+        - name: {{ $serviceName }}
+          image: {{ include "ufs.image" (merge $serviceConfig $) }}
+          imagePullPolicy: {{ $serviceConfig.image.pullPolicy | default $.Values.global.imagePullPolicy | default "IfNotPresent" }}
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: {{ $.Values.securityContext.runAsUser | default 1000 }}
+            runAsGroup: {{ $.Values.securityContext.runAsGroup | default 1000 }}
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: {{ $.Values.securityContext.readOnlyRootFilesystem | default true }}
+            {{- if $serviceConfig.securityContext.additionalCapabilities }}
+            capabilities:
+              add:
+                {{- toYaml $serviceConfig.securityContext.additionalCapabilities | nindent 16 }}
+            {{- end }}
+          ports:
+            - name: http
+              containerPort: {{ $serviceConfig.service.targetPort | default $serviceConfig.service.port | default 8080 }}
+              protocol: TCP
+            {{- if $serviceConfig.management }}
+            - name: management
+              containerPort: {{ $serviceConfig.management.port | default 8081 }}
+              protocol: TCP
+            {{- end }}
+            {{- if $serviceConfig.additionalPorts }}
+            {{- range $portName, $portConfig := $serviceConfig.additionalPorts }}
+            - name: {{ $portName }}
+              containerPort: {{ $portConfig.port }}
+              protocol: {{ $portConfig.protocol | default "TCP" }}
+            {{- end }}
+            {{- end }}
+          env:
+            {{- include "ufs.commonEnv" $ | nindent 12 }}
+            # Service-specific environment variables
+            - name: UFS_SERVICE_NAME
+              value: {{ $serviceName | quote }}
+            - name: UFS_SERVICE_PORT
+              value: {{ $serviceConfig.service.port | default 8080 | quote }}
+            {{- if $serviceConfig.database }}
+            # Database configuration
+            - name: DB_HOST
+              value: {{ $serviceConfig.database.host | default $.Values.global.postgresql.host | quote }}
+            - name: DB_PORT
+              value: {{ $serviceConfig.database.port | default $.Values.global.postgresql.port | quote }}
+            - name: DB_NAME
+              value: {{ $serviceConfig.database.name | quote }}
+            - name: DB_USERNAME
+              value: {{ $serviceConfig.database.username | quote }}
+            {{- end }}
+            # Spring Boot specific configuration
+            {{- if or (contains "java" ($serviceConfig.image.repository | lower)) (contains "spring" ($serviceConfig.image.repository | lower)) }}
+            - name: SPRING_APPLICATION_NAME
+              value: {{ $serviceName | quote }}
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              value: "health,info,metrics,prometheus"
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              value: "always"
+            - name: MANAGEMENT_METRICS_EXPORT_PROMETHEUS_ENABLED
+              value: "true"
+            {{- end }}
+            # Custom environment variables
+            {{- if $serviceConfig.env }}
+            {{- range $key, $value := $serviceConfig.env }}
+            - name: {{ $key }}
+              value: {{ $value | quote }}
+            {{- end }}
+            {{- end }}
+          envFrom:
+            - configMapRef:
+                name: {{ include "ufs.fullname" $ }}-{{ $serviceName }}-config
+            - secretRef:
+                name: {{ include "ufs.fullname" $ }}-{{ $serviceName }}-secret
+            {{- if $.Values.global.configMapRef }}
+            - configMapRef:
+                name: {{ $.Values.global.configMapRef }}
+            {{- end }}
+            {{- if $.Values.global.secretRef }}
+            - secretRef:
+                name: {{ $.Values.global.secretRef }}
+            {{- end }}
+          # Health probes optimized for financial services
+          {{- if or $serviceConfig.probes $.Values.probes }}
+          livenessProbe:
+            {{- if $serviceConfig.probes.liveness }}
+            httpGet:
+              path: {{ $serviceConfig.probes.liveness.path | default "/actuator/health/liveness" }}
+              port: {{ $serviceConfig.probes.liveness.port | default "management" }}
+              scheme: {{ $serviceConfig.probes.liveness.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ $serviceConfig.probes.liveness.initialDelaySeconds | default 60 }}
+            periodSeconds: {{ $serviceConfig.probes.liveness.periodSeconds | default 10 }}
+            timeoutSeconds: {{ $serviceConfig.probes.liveness.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $serviceConfig.probes.liveness.failureThreshold | default 3 }}
+            successThreshold: {{ $serviceConfig.probes.liveness.successThreshold | default 1 }}
+            {{- else }}
+            {{- include "ufs.livenessProbe" $ | nindent 12 }}
+            {{- end }}
+          readinessProbe:
+            {{- if $serviceConfig.probes.readiness }}
+            httpGet:
+              path: {{ $serviceConfig.probes.readiness.path | default "/actuator/health/readiness" }}
+              port: {{ $serviceConfig.probes.readiness.port | default "management" }}
+              scheme: {{ $serviceConfig.probes.readiness.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ $serviceConfig.probes.readiness.initialDelaySeconds | default 30 }}
+            periodSeconds: {{ $serviceConfig.probes.readiness.periodSeconds | default 5 }}
+            timeoutSeconds: {{ $serviceConfig.probes.readiness.timeoutSeconds | default 3 }}
+            failureThreshold: {{ $serviceConfig.probes.readiness.failureThreshold | default 3 }}
+            successThreshold: {{ $serviceConfig.probes.readiness.successThreshold | default 1 }}
+            {{- else }}
+            {{- include "ufs.readinessProbe" $ | nindent 12 }}
+            {{- end }}
+          {{- if or $serviceConfig.probes.startup $.Values.probes.startup }}
+          startupProbe:
+            {{- if $serviceConfig.probes.startup }}
+            httpGet:
+              path: {{ $serviceConfig.probes.startup.path | default "/actuator/health" }}
+              port: {{ $serviceConfig.probes.startup.port | default "management" }}
+              scheme: {{ $serviceConfig.probes.startup.scheme | default "HTTP" }}
+            initialDelaySeconds: {{ $serviceConfig.probes.startup.initialDelaySeconds | default 10 }}
+            periodSeconds: {{ $serviceConfig.probes.startup.periodSeconds | default 10 }}
+            timeoutSeconds: {{ $serviceConfig.probes.startup.timeoutSeconds | default 5 }}
+            failureThreshold: {{ $serviceConfig.probes.startup.failureThreshold | default 30 }}
+            successThreshold: {{ $serviceConfig.probes.startup.successThreshold | default 1 }}
+            {{- else }}
+            {{- include "ufs.startupProbe" $ | nindent 12 }}
+            {{- end }}
+          {{- end }}
+          {{- end }}
+          # Resource allocation based on service tier
+          resources:
+            {{- if $serviceConfig.resources }}
+            {{- toYaml $serviceConfig.resources | nindent 12 }}
+            {{- else }}
+            {{- $context := merge (dict "Values" (dict "global" (dict "serviceTier" ($serviceConfig.tier | default "standard")))) $ }}
+            {{- include "ufs.resources" $context | nindent 12 }}
+            {{- end }}
+          # Volume mounts for persistent data and configuration
+          volumeMounts:
+            {{- if $serviceConfig.persistence.enabled }}
+            - name: {{ $serviceName }}-data
+              mountPath: {{ $serviceConfig.persistence.mountPath | default "/data" }}
+              {{- if $serviceConfig.persistence.subPath }}
+              subPath: {{ $serviceConfig.persistence.subPath }}
+              {{- end }}
+            {{- end }}
+            # Temporary filesystem for read-only root filesystem compliance
+            - name: tmp
+              mountPath: /tmp
+            - name: var-cache
+              mountPath: /var/cache
+            - name: var-log
+              mountPath: /var/log
+            {{- if $serviceConfig.volumeMounts }}
+            {{- toYaml $serviceConfig.volumeMounts | nindent 12 }}
+            {{- end }}
+          {{- if $serviceConfig.lifecycle }}
+          lifecycle:
+            {{- toYaml $serviceConfig.lifecycle | nindent 12 }}
+          {{- end }}
+        {{- if $serviceConfig.sidecars }}
+        # Sidecar containers for additional functionality
+        {{- range $sidecarName, $sidecarConfig := $serviceConfig.sidecars }}
+        - name: {{ $sidecarName }}
+          image: {{ $sidecarConfig.image }}
+          imagePullPolicy: {{ $sidecarConfig.imagePullPolicy | default "IfNotPresent" }}
+          {{- if $sidecarConfig.ports }}
+          ports:
+            {{- toYaml $sidecarConfig.ports | nindent 12 }}
+          {{- end }}
+          {{- if $sidecarConfig.env }}
+          env:
+            {{- toYaml $sidecarConfig.env | nindent 12 }}
+          {{- end }}
+          {{- if $sidecarConfig.resources }}
+          resources:
+            {{- toYaml $sidecarConfig.resources | nindent 12 }}
+          {{- end }}
+          {{- if $sidecarConfig.volumeMounts }}
+          volumeMounts:
+            {{- toYaml $sidecarConfig.volumeMounts | nindent 12 }}
+          {{- end }}
+          securityContext:
+            {{- include "ufs.securityContext" $ | nindent 12 }}
+        {{- end }}
+        {{- end }}
+      # Volumes for persistent storage and temporary filesystems
+      volumes:
+        {{- if $serviceConfig.persistence.enabled }}
+        - name: {{ $serviceName }}-data
+          {{- if $serviceConfig.persistence.existingClaim }}
+          persistentVolumeClaim:
+            claimName: {{ $serviceConfig.persistence.existingClaim }}
+          {{- else }}
+          persistentVolumeClaim:
+            claimName: {{ include "ufs.fullname" $ }}-{{ $serviceName }}-data
+          {{- end }}
+        {{- end }}
+        # Temporary volumes for read-only root filesystem compliance
+        - name: tmp
+          emptyDir:
+            sizeLimit: {{ $serviceConfig.tmpVolume.sizeLimit | default "1Gi" }}
+        - name: var-cache
+          emptyDir:
+            sizeLimit: {{ $serviceConfig.cacheVolume.sizeLimit | default "1Gi" }}
+        - name: var-log
+          emptyDir:
+            sizeLimit: {{ $serviceConfig.logVolume.sizeLimit | default "1Gi" }}
+        {{- if $serviceConfig.volumes }}
+        {{- toYaml $serviceConfig.volumes | nindent 8 }}
+        {{- end }}
+      # Node selection and scheduling constraints
+      {{- if or $serviceConfig.nodeSelector $.Values.nodeSelector }}
+      nodeSelector:
+        {{- if $serviceConfig.nodeSelector }}
+        {{- toYaml $serviceConfig.nodeSelector | nindent 8 }}
+        {{- else }}
+        {{- include "ufs.nodeSelector" $ | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- if or $serviceConfig.tolerations $.Values.tolerations }}
+      tolerations:
+        {{- if $serviceConfig.tolerations }}
+        {{- toYaml $serviceConfig.tolerations | nindent 8 }}
+        {{- else }}
+        {{- include "ufs.tolerations" $ | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      # Anti-affinity rules for high availability
+      {{- if or $serviceConfig.affinity $.Values.affinity }}
+      affinity:
+        {{- if $serviceConfig.affinity }}
+        {{- toYaml $serviceConfig.affinity | nindent 8 }}
+        {{- else }}
+        {{- include "ufs.affinity" $ | nindent 8 }}
+        {{- end }}
+      {{- else }}
+      # Default anti-affinity for financial services high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - {{ include "ufs.name" $ }}
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - {{ $serviceName }}
+                topologyKey: kubernetes.io/hostname
+            - weight: 50
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - {{ include "ufs.name" $ }}
+                    - key: app.kubernetes.io/component
+                      operator: In
+                      values:
+                        - {{ $serviceName }}
+                topologyKey: topology.kubernetes.io/zone
+      {{- end }}
+      {{- if $serviceConfig.topologySpreadConstraints }}
+      # Topology spread constraints for better distribution
+      topologySpreadConstraints:
+        {{- toYaml $serviceConfig.topologySpreadConstraints | nindent 8 }}
+      {{- end }}
+{{- end }}
+{{- end }}

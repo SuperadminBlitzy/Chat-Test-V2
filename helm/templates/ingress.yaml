@@ -1,0 +1,361 @@
+{{- if .Values.ingress.enabled -}}
+---
+# =============================================================================
+# Kubernetes Ingress Resource for Financial Services Platform
+# =============================================================================
+# This Ingress resource manages external access to the backend microservices
+# routing traffic to the API Gateway with TLS termination and Istio integration
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Release.Name }}-ingress
+  namespace: {{ .Release.Namespace }}
+  labels:
+    # Standard Kubernetes labels for resource identification
+    app.kubernetes.io/name: {{ .Release.Name }}-ingress
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    # Financial services specific labels
+    financial-services.io/tier: gateway
+    financial-services.io/security-level: high
+    financial-services.io/compliance: pci-dss
+  annotations:
+    # =============================================================================
+    # Core Ingress Controller Annotations
+    # =============================================================================
+    # Ingress class specification for proper controller binding
+    kubernetes.io/ingress.class: {{ .Values.ingress.className | default "nginx" | quote }}
+    
+    # =============================================================================
+    # Security Annotations
+    # =============================================================================
+    # Force HTTPS redirect for all traffic to ensure encryption
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    # Enable HTTP Strict Transport Security (HSTS) for 31536000 seconds (1 year)
+    nginx.ingress.kubernetes.io/hsts: "true"
+    nginx.ingress.kubernetes.io/hsts-max-age: "31536000"
+    nginx.ingress.kubernetes.io/hsts-include-subdomains: "true"
+    # Secure headers for financial services compliance
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+      more_set_headers "Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'";
+      more_set_headers "Permissions-Policy: geolocation=(), microphone=(), camera=()";
+    
+    # =============================================================================
+    # Rate Limiting for Financial Services
+    # =============================================================================
+    # Implement rate limiting to prevent abuse and ensure fair usage
+    nginx.ingress.kubernetes.io/rate-limit: "1000"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-status-code: "429"
+    # Per-IP rate limiting for additional security
+    nginx.ingress.kubernetes.io/rate-limit-rps: "10"
+    
+    # =============================================================================
+    # Performance and Reliability
+    # =============================================================================
+    # Connection and timeout settings for high-performance financial workloads
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "5"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    # Enable connection pooling for better performance
+    nginx.ingress.kubernetes.io/upstream-keepalive-connections: "100"
+    nginx.ingress.kubernetes.io/upstream-keepalive-requests: "1000"
+    nginx.ingress.kubernetes.io/upstream-keepalive-timeout: "60"
+    
+    # =============================================================================
+    # Load Balancing Strategy
+    # =============================================================================
+    # Use consistent hashing for session affinity if needed
+    nginx.ingress.kubernetes.io/load-balance: "round_robin"
+    # Enable sticky sessions for stateful financial applications if required
+    nginx.ingress.kubernetes.io/affinity: "cookie"
+    nginx.ingress.kubernetes.io/affinity-mode: "persistent"
+    nginx.ingress.kubernetes.io/session-cookie-name: "ufs-session"
+    nginx.ingress.kubernetes.io/session-cookie-expires: "86400"
+    nginx.ingress.kubernetes.io/session-cookie-max-age: "86400"
+    nginx.ingress.kubernetes.io/session-cookie-path: "/"
+    nginx.ingress.kubernetes.io/session-cookie-change-on-failure: "true"
+    
+    # =============================================================================
+    # Istio Service Mesh Integration
+    # =============================================================================
+    # Enable Istio sidecar injection for advanced traffic management
+    sidecar.istio.io/inject: "true"
+    # Configure Istio traffic policy for financial services
+    traffic.istio.io/nodePortLB: "disable"
+    # Enable Istio mutual TLS for service-to-service communication
+    security.istio.io/tlsMode: "istio"
+    # Configure Istio circuit breaker for resilience
+    destination.istio.io/circuit-breaker: "true"
+    # Enable distributed tracing for observability
+    tracing.istio.io/enabled: "true"
+    # Configure Istio retry policy for reliability
+    retry.istio.io/attempts: "3"
+    retry.istio.io/per-try-timeout: "10s"
+    retry.istio.io/retry-on: "gateway-error,connect-failure,refused-stream"
+    
+    # =============================================================================
+    # TLS Certificate Management
+    # =============================================================================
+    # Automatic certificate management using cert-manager
+    cert-manager.io/cluster-issuer: {{ .Values.ingress.annotations["cert-manager.io/cluster-issuer"] | default "letsencrypt-prod" | quote }}
+    # Enable automatic certificate renewal
+    cert-manager.io/renew-before: "720h"
+    # Configure certificate key algorithm
+    cert-manager.io/private-key-algorithm: "RSA"
+    cert-manager.io/private-key-size: "2048"
+    
+    # =============================================================================
+    # Observability and Monitoring
+    # =============================================================================
+    # Enable Prometheus metrics collection
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "10254"
+    prometheus.io/path: "/metrics"
+    # Enable detailed access logging for financial compliance
+    nginx.ingress.kubernetes.io/enable-access-log: "true"
+    nginx.ingress.kubernetes.io/access-log-path: "/var/log/nginx/access.log"
+    # Configure custom log format for financial audit requirements
+    nginx.ingress.kubernetes.io/log-format: |
+      {
+        "timestamp": "$time_iso8601",
+        "request_id": "$req_id",
+        "remote_addr": "$remote_addr",
+        "remote_user": "$remote_user",
+        "request": "$request",
+        "status": $status,
+        "body_bytes_sent": $body_bytes_sent,
+        "request_time": $request_time,
+        "http_referrer": "$http_referer",
+        "http_user_agent": "$http_user_agent",
+        "http_x_forwarded_for": "$http_x_forwarded_for",
+        "http_x_forwarded_proto": "$http_x_forwarded_proto",
+        "upstream_addr": "$upstream_addr",
+        "upstream_response_time": "$upstream_response_time",
+        "upstream_status": "$upstream_status"
+      }
+    
+    # =============================================================================
+    # Custom Annotations from Values
+    # =============================================================================
+    {{- with .Values.ingress.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    
+    # =============================================================================
+    # Financial Services Compliance Annotations
+    # =============================================================================
+    # PCI DSS compliance marking
+    compliance.financial-services.io/pci-dss: "true"
+    # SOX compliance for financial reporting
+    compliance.financial-services.io/sox: "true"
+    # GDPR compliance for data protection
+    compliance.financial-services.io/gdpr: "true"
+    # Basel III compliance for risk management
+    compliance.financial-services.io/basel-iii: "true"
+    # PSD2 compliance for payment services
+    compliance.financial-services.io/psd2: "true"
+
+spec:
+  # =============================================================================
+  # Ingress Controller Class Configuration
+  # =============================================================================
+  ingressClassName: {{ .Values.ingress.className | default "nginx" }}
+  
+  # =============================================================================
+  # TLS Configuration for Secure Financial Communications
+  # =============================================================================
+  {{- if .Values.ingress.tls }}
+  tls:
+    {{- range .Values.ingress.tls }}
+    - hosts:
+        {{- range .hosts }}
+        - {{ . | quote }}
+        {{- end }}
+      secretName: {{ .secretName }}
+    {{- end }}
+  {{- end }}
+  
+  # =============================================================================
+  # Routing Rules Configuration
+  # =============================================================================
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host | quote }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType | default "Prefix" }}
+            backend:
+              service:
+                # Route traffic to the API Gateway service
+                name: {{ $.Release.Name }}-api-gateway
+                port:
+                  number: {{ $.Values.apiGateway.service.port | default 8080 }}
+          {{- end }}
+    {{- end }}
+
+{{- end }}
+
+---
+{{- if and .Values.ingress.enabled .Values.global.networkPolicy.enabled }}
+# =============================================================================
+# Network Policy for Ingress Security
+# =============================================================================
+# This NetworkPolicy ensures secure network communication for the Ingress
+# allowing only necessary traffic flows as per financial services security requirements
+# =============================================================================
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ .Release.Name }}-ingress-network-policy
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-ingress-network-policy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/component: network-policy
+    app.kubernetes.io/part-of: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  # Apply policy to ingress controller pods
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Release.Name }}-ingress
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow HTTP traffic from anywhere (will be redirected to HTTPS)
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 80
+    # Allow HTTPS traffic from anywhere
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow metrics scraping from Prometheus
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 10254
+  egress:
+    # Allow traffic to API Gateway service
+    - to:
+        - podSelector:
+            matchLabels:
+              app.kubernetes.io/name: {{ .Release.Name }}-api-gateway
+      ports:
+        - protocol: TCP
+          port: {{ .Values.apiGateway.service.port | default 8080 }}
+    # Allow DNS resolution
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+        - podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow certificate validation (ACME challenge)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 443
+{{- end }}
+
+---
+{{- if and .Values.ingress.enabled .Values.podDisruptionBudget.enabled }}
+# =============================================================================
+# Pod Disruption Budget for High Availability
+# =============================================================================
+# This PDB ensures that the ingress controller maintains high availability
+# during cluster maintenance operations, critical for financial services uptime
+# =============================================================================
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: {{ .Release.Name }}-ingress-pdb
+  namespace: {{ .Release.Namespace }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-ingress-pdb
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/component: pod-disruption-budget
+    app.kubernetes.io/part-of: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+spec:
+  # Ensure minimum availability during disruptions
+  minAvailable: {{ .Values.podDisruptionBudget.minAvailable | default "50%" }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
+{{- end }}
+
+---
+{{- if and .Values.ingress.enabled .Values.prometheus.serviceMonitor.enabled }}
+# =============================================================================
+# ServiceMonitor for Prometheus Metrics Collection
+# =============================================================================
+# This ServiceMonitor enables Prometheus to scrape metrics from the ingress controller
+# providing observability for financial services compliance and monitoring
+# =============================================================================
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: {{ .Release.Name }}-ingress-metrics
+  namespace: {{ .Values.prometheus.serviceMonitor.namespace | default "monitoring" }}
+  labels:
+    app.kubernetes.io/name: {{ .Release.Name }}-ingress-metrics
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/component: service-monitor
+    app.kubernetes.io/part-of: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    # Prometheus operator selector
+    prometheus: kube-prometheus
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ingress-nginx
+      app.kubernetes.io/component: controller
+  endpoints:
+    - port: prometheus
+      interval: {{ .Values.prometheus.serviceMonitor.interval | default "30s" }}
+      scrapeTimeout: {{ .Values.prometheus.serviceMonitor.scrapeTimeout | default "10s" }}
+      path: /metrics
+      scheme: http
+      # Collect financial services specific metrics
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'nginx_ingress_controller_(request_duration_seconds|requests_total|response_size|request_size)'
+          targetLabel: __tmp_financial_metric
+          replacement: 'true'
+        - sourceLabels: [__tmp_financial_metric]
+          regex: 'true'
+          targetLabel: financial_services_metric
+          replacement: 'ingress'
+{{- end }}

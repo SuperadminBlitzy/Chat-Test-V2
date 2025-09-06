@@ -1,0 +1,606 @@
+{{- /*
+=============================================================================
+Unified Financial Services Platform - Service Resources Template
+=============================================================================
+This template generates Kubernetes Service resources for each enabled microservice
+defined in the values.yaml file. It provides service discovery and load balancing
+capabilities for the microservices architecture.
+
+The template supports:
+- Multiple service types (ClusterIP, LoadBalancer, NodePort)
+- Health check endpoints
+- Service mesh integration
+- Monitoring and observability
+- Security annotations
+- High availability configurations
+=============================================================================
+*/}}
+
+{{- /*
+Helper template to generate service labels
+*/}}
+{{- define "ufs.serviceLabels" -}}
+app.kubernetes.io/name: {{ .name }}
+app.kubernetes.io/instance: {{ $.Release.Name }}
+app.kubernetes.io/version: {{ $.Chart.AppVersion | default "latest" }}
+app.kubernetes.io/component: microservice
+app.kubernetes.io/part-of: unified-financial-services
+app.kubernetes.io/managed-by: {{ $.Release.Service }}
+tier: backend
+environment: {{ $.Values.global.environment | default "production" }}
+{{- end }}
+
+{{- /*
+Helper template to generate common annotations
+*/}}
+{{- define "ufs.serviceAnnotations" -}}
+{{- if $.Values.prometheus.enabled }}
+prometheus.io/scrape: "true"
+prometheus.io/port: {{ .targetPort | quote }}
+prometheus.io/path: "/actuator/prometheus"
+{{- end }}
+{{- if $.Values.jaeger.enabled }}
+sidecar.jaegertracing.io/inject: "true"
+{{- end }}
+service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/actuator/health"
+service.beta.kubernetes.io/aws-load-balancer-healthcheck-interval: "30"
+service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+{{- end }}
+
+{{- /*
+API Gateway Service - Internet-facing load balancer for external access
+*/}}
+{{- if and .Values.api-gateway .Values.api-gateway.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-api-gateway
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "api-gateway" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: external
+    criticality: high
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.api-gateway.service.targetPort | default 8080) "Values" .Values) | nindent 4 }}
+    {{- with .Values.api-gateway.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-scheme: "internet-facing"
+    service.beta.kubernetes.io/aws-load-balancer-cross-zone-load-balancing-enabled: "true"
+    external-dns.alpha.kubernetes.io/hostname: api.{{ .Values.global.domain | default "ufs.com" }}
+spec:
+  type: {{ .Values.api-gateway.service.type | default "LoadBalancer" }}
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 86400
+  ports:
+    - name: http
+      port: {{ .Values.api-gateway.service.port | default 8080 }}
+      targetPort: {{ .Values.api-gateway.service.targetPort | default 8080 }}
+      protocol: TCP
+    - name: https
+      port: 8443
+      targetPort: 8443
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: api-gateway
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Discovery Service - Internal service for service registration and discovery
+*/}}
+{{- if and .Values.discovery-service .Values.discovery-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-discovery-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "discovery-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.discovery-service.service.targetPort | default 8761) "Values" .Values) | nindent 4 }}
+    {{- with .Values.discovery-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.discovery-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.discovery-service.service.port | default 8761 }}
+      targetPort: {{ .Values.discovery-service.service.targetPort | default 8761 }}
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: discovery-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Configuration Server - Internal service for centralized configuration management
+*/}}
+{{- if and .Values.config-server .Values.config-server.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-config-server
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "config-server" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.config-server.service.targetPort | default 8888) "Values" .Values) | nindent 4 }}
+    {{- with .Values.config-server.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.config-server.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.config-server.service.port | default 8888 }}
+      targetPort: {{ .Values.config-server.service.targetPort | default 8888 }}
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: config-server
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Authentication Service - Critical service for user authentication and authorization
+*/}}
+{{- if and .Values.auth-service .Values.auth-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-auth-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "auth-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: critical
+    qos-class: guaranteed
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.auth-service.service.targetPort | default 9000) "Values" .Values) | nindent 4 }}
+    {{- with .Values.auth-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-path: "/actuator/health/readiness"
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-grace-period-seconds: "300"
+spec:
+  type: {{ .Values.auth-service.service.type | default "ClusterIP" }}
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  ports:
+    - name: http
+      port: {{ .Values.auth-service.service.port | default 9000 }}
+      targetPort: {{ .Values.auth-service.service.targetPort | default 9000 }}
+      protocol: TCP
+    - name: grpc
+      port: 9001
+      targetPort: 9001
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Customer Service - Core business service for customer management
+*/}}
+{{- if and .Values.customer-service .Values.customer-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-customer-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "customer-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+    data-classification: pii
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.customer-service.service.targetPort | default 8081) "Values" .Values) | nindent 4 }}
+    {{- with .Values.customer-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.customer-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.customer-service.service.port | default 8081 }}
+      targetPort: {{ .Values.customer-service.service.targetPort | default 8081 }}
+      protocol: TCP
+    - name: grpc
+      port: 8082
+      targetPort: 8082
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: customer-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Risk Assessment Service - AI/ML service for risk analysis
+*/}}
+{{- if and .Values.risk-assessment-service .Values.risk-assessment-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-risk-assessment-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "risk-assessment-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+    workload-type: ml
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.risk-assessment-service.service.targetPort | default 8082) "Values" .Values) | nindent 4 }}
+    {{- with .Values.risk-assessment-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.risk-assessment-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.risk-assessment-service.service.port | default 8082 }}
+      targetPort: {{ .Values.risk-assessment-service.service.targetPort | default 8082 }}
+      protocol: TCP
+    - name: grpc
+      port: 8083
+      targetPort: 8083
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: risk-assessment-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Compliance Service - Regulatory compliance and monitoring
+*/}}
+{{- if and .Values.compliance-service .Values.compliance-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-compliance-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "compliance-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+    compliance-required: "true"
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.compliance-service.service.targetPort | default 8083) "Values" .Values) | nindent 4 }}
+    {{- with .Values.compliance-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.compliance-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.compliance-service.service.port | default 8083 }}
+      targetPort: {{ .Values.compliance-service.service.targetPort | default 8083 }}
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: compliance-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Transaction Service - Core financial transaction processing
+*/}}
+{{- if and .Values.transaction-service .Values.transaction-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-transaction-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "transaction-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: critical
+    qos-class: guaranteed
+    data-classification: financial
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.transaction-service.service.targetPort | default 8084) "Values" .Values) | nindent 4 }}
+    {{- with .Values.transaction-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    service.beta.kubernetes.io/aws-load-balancer-healthcheck-timeout: "10"
+spec:
+  type: {{ .Values.transaction-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.transaction-service.service.port | default 8084 }}
+      targetPort: {{ .Values.transaction-service.service.targetPort | default 8084 }}
+      protocol: TCP
+    - name: grpc
+      port: 8085
+      targetPort: 8085
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: transaction-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Analytics Service - Data analytics and reporting
+*/}}
+{{- if and .Values.analytics-service .Values.analytics-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-analytics-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "analytics-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: medium
+    workload-type: analytics
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.analytics-service.service.targetPort | default 8085) "Values" .Values) | nindent 4 }}
+    {{- with .Values.analytics-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.analytics-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.analytics-service.service.port | default 8085 }}
+      targetPort: {{ .Values.analytics-service.service.targetPort | default 8085 }}
+      protocol: TCP
+    - name: spark-ui
+      port: 4040
+      targetPort: 4040
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: analytics-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Financial Wellness Service - Personal financial management
+*/}}
+{{- if and .Values.financial-wellness-service .Values.financial-wellness-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-financial-wellness-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "financial-wellness-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: medium
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.financial-wellness-service.service.targetPort | default 8086) "Values" .Values) | nindent 4 }}
+    {{- with .Values.financial-wellness-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.financial-wellness-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.financial-wellness-service.service.port | default 8086 }}
+      targetPort: {{ .Values.financial-wellness-service.service.targetPort | default 8086 }}
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: financial-wellness-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+AI Service - Artificial Intelligence and Machine Learning
+*/}}
+{{- if and .Values.ai-service .Values.ai-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-ai-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "ai-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+    workload-type: ai-ml
+    gpu-enabled: "{{ .Values.ai-service.config.models.tensorflow.gpuEnabled | default false }}"
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.ai-service.service.targetPort | default 5000) "Values" .Values) | nindent 4 }}
+    {{- with .Values.ai-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.ai-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.ai-service.service.port | default 5000 }}
+      targetPort: {{ .Values.ai-service.service.targetPort | default 5000 }}
+      protocol: TCP
+    - name: grpc
+      port: 5001
+      targetPort: 5001
+      protocol: TCP
+    - name: tensorboard
+      port: 6006
+      targetPort: 6006
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: ai-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Blockchain Service - Distributed ledger and smart contracts
+*/}}
+{{- if and .Values.blockchain-service .Values.blockchain-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-blockchain-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "blockchain-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: high
+    blockchain-network: hyperledger-fabric
+    consensus-algorithm: "{{ .Values.blockchain-service.config.consensus.algorithm | default "raft" }}"
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.blockchain-service.service.targetPort | default 3000) "Values" .Values) | nindent 4 }}
+    {{- with .Values.blockchain-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.blockchain-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.blockchain-service.service.port | default 3000 }}
+      targetPort: {{ .Values.blockchain-service.service.targetPort | default 3000 }}
+      protocol: TCP
+    - name: peer
+      port: 7051
+      targetPort: 7051
+      protocol: TCP
+    - name: orderer
+      port: 7050
+      targetPort: 7050
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: blockchain-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Notification Service - Multi-channel notification system
+*/}}
+{{- if and .Values.notification-service .Values.notification-service.enabled }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-notification-service
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "notification-service" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: internal
+    criticality: medium
+    notification-channels: "email,sms,push"
+  annotations:
+    {{- include "ufs.serviceAnnotations" (dict "targetPort" (.Values.notification-service.service.targetPort | default 3001) "Values" .Values) | nindent 4 }}
+    {{- with .Values.notification-service.service.annotations }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  type: {{ .Values.notification-service.service.type | default "ClusterIP" }}
+  ports:
+    - name: http
+      port: {{ .Values.notification-service.service.port | default 3001 }}
+      targetPort: {{ .Values.notification-service.service.targetPort | default 3001 }}
+      protocol: TCP
+    - name: websocket
+      port: 3002
+      targetPort: 3002
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: notification-service
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+
+{{- /*
+Headless Service for StatefulSet applications (if needed)
+This service is used for stateful applications that require stable network identities
+*/}}
+{{- if .Values.global.statefulServices.enabled | default false }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "ufs.fullname" . }}-stateful-headless
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.serviceLabels" (dict "name" "stateful-headless" "Release" .Release "Chart" .Chart "Values" .Values) | nindent 4 }}
+    service-type: headless
+    stateful: "true"
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: peer
+      port: 8080
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    stateful: "true"
+    app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}

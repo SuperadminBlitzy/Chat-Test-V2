@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.namespace.name | default "ufs" }}
+  labels:
+    # Standard Kubernetes app labels
+    app.kubernetes.io/name: {{ .Chart.Name }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/version: {{ .Chart.Version }}
+    app.kubernetes.io/managed-by: {{ .Release.Service }}
+    app.kubernetes.io/component: platform
+    app.kubernetes.io/part-of: unified-financial-services
+    
+    # Financial services specific labels
+    platform: unified-financial-services
+    environment: {{ .Values.environment | default "production" }}
+    tier: {{ .Values.namespace.tier | default "financial-services" }}
+    criticality: {{ .Values.namespace.criticality | default "high" }}
+    compliance-scope: {{ .Values.namespace.complianceScope | default "pci-dss,sox,gdpr" }}
+    
+    # Governance and management labels
+    cost-center: {{ .Values.namespace.costCenter | default "financial-technology" }}
+    business-unit: {{ .Values.namespace.businessUnit | default "digital-banking" }}
+    data-classification: {{ .Values.namespace.dataClassification | default "confidential" }}
+    
+    # Security and monitoring labels
+    security-zone: {{ .Values.namespace.securityZone | default "restricted" }}
+    monitoring-tier: {{ .Values.namespace.monitoringTier | default "platinum" }}
+    backup-policy: {{ .Values.namespace.backupPolicy | default "critical-daily" }}
+    
+  annotations:
+    # Financial services compliance annotations
+    compliance.financial-platform.io/pci-dss: "{{ .Values.namespace.annotations.pciDssCompliant | default "required" }}"
+    compliance.financial-platform.io/sox: "{{ .Values.namespace.annotations.soxCompliant | default "required" }}"
+    compliance.financial-platform.io/gdpr: "{{ .Values.namespace.annotations.gdprCompliant | default "required" }}"
+    compliance.financial-platform.io/iso27001: "{{ .Values.namespace.annotations.iso27001Compliant | default "required" }}"
+    
+    # Security policy annotations
+    security.financial-platform.io/network-policy: "{{ .Values.namespace.annotations.networkPolicyRequired | default "strict" }}"
+    security.financial-platform.io/pod-security-standard: "{{ .Values.namespace.annotations.podSecurityStandard | default "restricted" }}"
+    security.financial-platform.io/encryption-required: "{{ .Values.namespace.annotations.encryptionRequired | default "true" }}"
+    security.financial-platform.io/tls-required: "{{ .Values.namespace.annotations.tlsRequired | default "true" }}"
+    
+    # Resource management annotations
+    resources.financial-platform.io/cpu-guarantee: "{{ .Values.namespace.annotations.cpuGuarantee | default "enabled" }}"
+    resources.financial-platform.io/memory-guarantee: "{{ .Values.namespace.annotations.memoryGuarantee | default "enabled" }}"
+    resources.financial-platform.io/qos-class: "{{ .Values.namespace.annotations.qosClass | default "guaranteed" }}"
+    
+    # Monitoring and observability annotations
+    monitoring.financial-platform.io/prometheus-scrape: "{{ .Values.namespace.annotations.prometheusEnabled | default "true" }}"
+    monitoring.financial-platform.io/jaeger-trace: "{{ .Values.namespace.annotations.jaegerEnabled | default "true" }}"
+    monitoring.financial-platform.io/log-level: "{{ .Values.namespace.annotations.logLevel | default "info" }}"
+    monitoring.financial-platform.io/audit-logging: "{{ .Values.namespace.annotations.auditLogging | default "enabled" }}"
+    
+    # Disaster recovery annotations
+    backup.financial-platform.io/policy: "{{ .Values.namespace.annotations.backupPolicy | default "critical-financial-data" }}"
+    backup.financial-platform.io/retention: "{{ .Values.namespace.annotations.backupRetention | default "7-years" }}"
+    backup.financial-platform.io/encryption: "{{ .Values.namespace.annotations.backupEncryption | default "aes-256" }}"
+    
+    # Service mesh annotations for Istio integration
+    istio.io/rev: {{ .Values.istio.revision | default "stable" }}
+    sidecar.istio.io/inject: "{{ .Values.istio.sidecarInjection | default "true" }}"
+    
+    # ArgoCD sync annotations
+    argocd.argoproj.io/sync-wave: "{{ .Values.namespace.annotations.syncWave | default "-1" }}"
+    argocd.argoproj.io/hook: "{{ .Values.namespace.annotations.argoHook | default "PreSync" }}"
+    
+    # Financial platform metadata annotations
+    platform.financial-services.io/created-by: "{{ .Values.namespace.annotations.createdBy | default "platform-team" }}"
+    platform.financial-services.io/contact: "{{ .Values.namespace.annotations.contact | default "platform-team@company.com" }}"
+    platform.financial-services.io/documentation: "{{ .Values.namespace.annotations.documentation | default "https://docs.financial-platform.io" }}"
+    platform.financial-services.io/support-tier: "{{ .Values.namespace.annotations.supportTier | default "24x7-critical" }}"
+    
+    # Regulatory reporting annotations
+    reporting.financial-platform.io/transaction-reporting: "{{ .Values.namespace.annotations.transactionReporting | default "enabled" }}"
+    reporting.financial-platform.io/audit-trail: "{{ .Values.namespace.annotations.auditTrail | default "required" }}"
+    reporting.financial-platform.io/data-retention: "{{ .Values.namespace.annotations.dataRetention | default "7-years" }}"
+    
+    # Cost management annotations
+    cost.financial-platform.io/budget-alert: "{{ .Values.namespace.annotations.budgetAlert | default "enabled" }}"
+    cost.financial-platform.io/cost-allocation: "{{ .Values.namespace.annotations.costAllocation | default "financial-services" }}"
+    cost.financial-platform.io/billing-code: "{{ .Values.namespace.annotations.billingCode | default "FS-PLATFORM-001" }}"
+    
+    # Change management annotations
+    change.financial-platform.io/change-window: "{{ .Values.namespace.annotations.changeWindow | default "maintenance-window-only" }}"
+    change.financial-platform.io/approval-required: "{{ .Values.namespace.annotations.approvalRequired | default "change-advisory-board" }}"
+    change.financial-platform.io/risk-assessment: "{{ .Values.namespace.annotations.riskAssessment | default "high-impact" }}"

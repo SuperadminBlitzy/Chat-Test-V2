@@ -1,0 +1,285 @@
+{{/*
+Unified Financial Services Platform - Kubernetes RoleBindings Template
+This template dynamically creates RoleBinding resources for each microservice defined in values.yaml,
+implementing fine-grained RBAC permissions based on the principle of least privilege for financial services compliance.
+
+The template supports:
+- Conditional creation based on RBAC configuration
+- Dynamic RoleBinding generation for each microservice
+- Service-specific permission binding between Roles and ServiceAccounts
+- Financial services security standards compliance (PCI-DSS, SOX, GDPR, Basel III)
+- Audit trail support through proper labeling and annotations
+- Integration with service mesh security policies
+*/}}
+
+{{- if .Values.rbac.create -}}
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if $serviceConfig.enabled -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ $.Release.Name }}-{{ $serviceName }}-rolebinding
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+    app.kubernetes.io/name: {{ $.Chart.Name }}
+    helm.sh/chart: {{ $.Chart.Name }}-{{ $.Chart.Version }}
+    app.kubernetes.io/instance: {{ $.Release.Name }}
+    app.kubernetes.io/managed-by: Helm
+    ufs.platform/service-name: {{ $serviceName | quote }}
+    ufs.platform/rbac-type: "service-rolebinding"
+    ufs.platform/security-tier: {{ $serviceConfig.rbac.securityTier | default "standard" | quote }}
+    ufs.platform/compliance-scope: "financial-services"
+    {{- if eq $serviceName "api-gateway" }}
+    ufs.platform/network-exposure: "external"
+    {{- else }}
+    ufs.platform/network-exposure: "internal"
+    {{- end }}
+    {{- if or (eq $serviceName "auth-service") (eq $serviceName "customer-service") (eq $serviceName "transaction-service") (eq $serviceName "risk-assessment-service") (eq $serviceName "compliance-service") (eq $serviceName "ai-service") (eq $serviceName "blockchain-service") }}
+    ufs.platform/criticality: "high"
+    {{- else if or (eq $serviceName "analytics-service") (eq $serviceName "config-server") (eq $serviceName "discovery-service") }}
+    ufs.platform/criticality: "medium"
+    {{- else }}
+    ufs.platform/criticality: "low"
+    {{- end }}
+    {{- if $serviceConfig.rbac.labels }}
+    {{- toYaml $serviceConfig.rbac.labels | nindent 4 }}
+    {{- end }}
+  annotations:
+    {{- include "ufs.annotations" $ | nindent 4 }}
+    ufs.platform/created-for: {{ $serviceName | quote }}
+    ufs.platform/binding-type: "role-to-serviceaccount"
+    ufs.platform/permission-level: {{ $serviceConfig.rbac.permissionLevel | default "standard" | quote }}
+    ufs.platform/audit-required: "true"
+    ufs.platform/compliance-frameworks: "PCI-DSS,SOX,GDPR,Basel-III,FINRA"
+    ufs.platform/last-reviewed: {{ now | date "2006-01-02" | quote }}
+    ufs.platform/review-frequency: "quarterly"
+    {{- if eq $serviceName "customer-service" }}
+    ufs.platform/data-classification: "pii"
+    ufs.platform/gdpr-applicable: "true"
+    {{- else if eq $serviceName "transaction-service" }}
+    ufs.platform/data-classification: "financial"
+    ufs.platform/pci-dss-level: "1"
+    {{- else if or (eq $serviceName "auth-service") (eq $serviceName "risk-assessment-service") }}
+    ufs.platform/data-classification: "confidential"
+    ufs.platform/security-monitoring: "enhanced"
+    {{- else }}
+    ufs.platform/data-classification: "internal"
+    {{- end }}
+    {{- if or (eq $serviceName "ai-service") (eq $serviceName "risk-assessment-service") (eq $serviceName "analytics-service") }}
+    ufs.platform/ml-workload: "true"
+    ufs.platform/compute-intensive: "true"
+    {{- end }}
+    {{- if eq $serviceName "blockchain-service" }}
+    ufs.platform/distributed-ledger: "hyperledger-fabric"
+    ufs.platform/consensus-algorithm: "raft"
+    {{- end }}
+    {{- if $serviceConfig.rbac.annotations }}
+    {{- toYaml $serviceConfig.rbac.annotations | nindent 4 }}
+    {{- end }}
+subjects:
+  - kind: ServiceAccount
+    name: {{ $.Release.Name }}-{{ $serviceName }}-sa
+    namespace: {{ $.Release.Namespace }}
+    {{- if $serviceConfig.rbac.additionalSubjects }}
+    {{- range $serviceConfig.rbac.additionalSubjects }}
+  - kind: {{ .kind | default "ServiceAccount" }}
+    name: {{ .name }}
+    namespace: {{ .namespace | default $.Release.Namespace }}
+    {{- if .apiGroup }}
+    apiGroup: {{ .apiGroup }}
+    {{- end }}
+    {{- end }}
+    {{- end }}
+roleRef:
+  kind: Role
+  name: {{ $.Release.Name }}-{{ $serviceName }}-role
+  apiGroup: rbac.authorization.k8s.io
+
+{{- end }}
+{{- end }}
+
+{{/*
+Additional RoleBindings for cross-service communication and shared resources
+These bindings enable controlled inter-service communication within the financial platform
+*/}}
+
+{{/*
+Service Discovery Access RoleBinding - Allows services to register and discover each other
+*/}}
+{{- if and (.Values.rbac.create) (.Values.rbac.enableServiceDiscovery) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-service-discovery-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" . | nindent 4 }}
+    ufs.platform/rbac-type: "cross-service-rolebinding"
+    ufs.platform/access-type: "service-discovery"
+    ufs.platform/compliance-scope: "platform-infrastructure"
+  annotations:
+    {{- include "ufs.annotations" . | nindent 4 }}
+    ufs.platform/binding-purpose: "service-discovery-access"
+    ufs.platform/security-impact: "medium"
+    ufs.platform/audit-required: "true"
+subjects:
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if $serviceConfig.enabled }}
+  - kind: ServiceAccount
+    name: {{ $.Release.Name }}-{{ $serviceName }}-sa
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-service-discovery-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+{{/*
+Configuration Access RoleBinding - Allows services to access shared configuration
+*/}}
+{{- if and (.Values.rbac.create) (.Values.rbac.enableConfigAccess) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-config-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" . | nindent 4 }}
+    ufs.platform/rbac-type: "cross-service-rolebinding"
+    ufs.platform/access-type: "configuration"
+    ufs.platform/compliance-scope: "platform-configuration"
+  annotations:
+    {{- include "ufs.annotations" . | nindent 4 }}
+    ufs.platform/binding-purpose: "configuration-access"
+    ufs.platform/security-impact: "high"
+    ufs.platform/audit-required: "true"
+    ufs.platform/config-server-integration: "true"
+subjects:
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if and $serviceConfig.enabled (not (eq $serviceName "config-server")) }}
+  - kind: ServiceAccount
+    name: {{ $.Release.Name }}-{{ $serviceName }}-sa
+    namespace: {{ $.Release.Namespace }}
+{{- end }}
+{{- end }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-config-access-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+{{/*
+Monitoring Access RoleBinding - Allows monitoring services to collect metrics
+*/}}
+{{- if and (.Values.rbac.create) (.Values.rbac.enableMonitoringAccess) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-monitoring-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" . | nindent 4 }}
+    ufs.platform/rbac-type: "monitoring-rolebinding"
+    ufs.platform/access-type: "metrics-collection"
+    ufs.platform/compliance-scope: "operational-monitoring"
+  annotations:
+    {{- include "ufs.annotations" . | nindent 4 }}
+    ufs.platform/binding-purpose: "monitoring-access"
+    ufs.platform/security-impact: "low"
+    ufs.platform/audit-required: "false"
+    ufs.platform/prometheus-integration: "true"
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-prometheus-sa
+    namespace: {{ .Release.Namespace }}
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-grafana-sa
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-monitoring-access-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+{{/*
+Audit Access RoleBinding - Allows audit services to access audit logs and events
+*/}}
+{{- if and (.Values.rbac.create) (.Values.rbac.enableAuditAccess) }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-audit-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" . | nindent 4 }}
+    ufs.platform/rbac-type: "audit-rolebinding"
+    ufs.platform/access-type: "audit-logs"
+    ufs.platform/compliance-scope: "regulatory-compliance"
+  annotations:
+    {{- include "ufs.annotations" . | nindent 4 }}
+    ufs.platform/binding-purpose: "audit-access"
+    ufs.platform/security-impact: "high"
+    ufs.platform/audit-required: "true"
+    ufs.platform/compliance-frameworks: "SOX,PCI-DSS,GDPR"
+    ufs.platform/retention-policy: "7-years"
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-compliance-service-sa
+    namespace: {{ .Release.Namespace }}
+  {{- if hasKey .Values.services "audit-service" }}
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-audit-service-sa
+    namespace: {{ .Release.Namespace }}
+  {{- end }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-audit-access-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+{{/*
+Emergency Access RoleBinding - Provides elevated permissions during incidents
+Only enabled in development environments or during approved maintenance windows
+*/}}
+{{- if and (.Values.rbac.create) (.Values.rbac.enableEmergencyAccess) (eq .Values.global.environment "development") }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-emergency-access
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" . | nindent 4 }}
+    ufs.platform/rbac-type: "emergency-rolebinding"
+    ufs.platform/access-type: "emergency-operations"
+    ufs.platform/compliance-scope: "incident-response"
+    ufs.platform/environment-restricted: "development-only"
+  annotations:
+    {{- include "ufs.annotations" . | nindent 4 }}
+    ufs.platform/binding-purpose: "emergency-access"
+    ufs.platform/security-impact: "critical"
+    ufs.platform/audit-required: "true"
+    ufs.platform/approval-required: "true"
+    ufs.platform/time-limited: "true"
+    ufs.platform/environment: "development"
+    ufs.platform/warning: "Emergency access - use only during approved incidents"
+subjects:
+  - kind: ServiceAccount
+    name: {{ .Release.Name }}-emergency-sa
+    namespace: {{ .Release.Namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-emergency-access-role
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}
+
+{{- end }}

@@ -1,0 +1,1149 @@
+# =============================================================================
+# Unified Financial Services Platform - Development Environment Values
+# =============================================================================
+# This file provides development-specific configuration overrides for the
+# Unified Financial Services Platform Helm chart. It configures services
+# for a containerized development environment with optimized resource
+# allocation, debug-level logging, and connections to development-tier
+# backing services.
+# =============================================================================
+
+# Global Development Configuration
+global:
+  # Development Environment Identifier
+  environment: dev
+  
+  # Development Container Registry Configuration
+  imageRegistry: "harbor.financial-platform.com/dev"
+  imagePullPolicy: Always  # Always pull latest dev images
+  
+  # Development Domain Configuration
+  domain: "dev.ufs.com"
+  
+  # Development Database Configuration
+  database:
+    host: "postgresql-dev"
+    port: 5432
+    sslMode: "disable"  # Disabled for dev environment
+    pool:
+      size: 10  # Smaller connection pool for dev
+      maxOverflow: 15
+      timeout: 15
+      recycle: 1800
+      prePing: true
+  
+  # Development MongoDB Configuration
+  mongodb:
+    uri: "mongodb://mongodb-dev:27017/ufs-dev"
+    host: "mongodb-dev"
+    port: 27017
+    database: "ufs-dev"
+    authDatabase: "admin"
+    replicaSet: ""  # Single instance for dev
+  
+  # Development Kafka Configuration
+  kafka:
+    bootstrapServers: "kafka-dev:9092"
+    brokers: "kafka-dev:9092"
+    security:
+      protocol: "PLAINTEXT"  # No security for dev
+      mechanism: ""
+  
+  # Development Redis Configuration
+  redis:
+    host: "redis-dev"
+    port: 6379
+    password: ""  # No password for dev
+    database: 0
+    sentinel:
+      enabled: false
+  
+  # Development InfluxDB Configuration
+  influxdb:
+    url: "http://influxdb-dev:8086"
+    host: "influxdb-dev"
+    port: 8086
+    token: "dev-token"
+    organization: "financial-services-dev"
+    bucket: "metrics-dev"
+  
+  # Development Tracing Configuration
+  jaeger:
+    agentHost: "jaeger-agent"
+    agentPort: 6831
+    collectorEndpoint: "http://jaeger-collector:14268/api/traces"
+  
+  # Development Security Context (Relaxed for dev)
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 1000
+    runAsGroup: 1000
+    fsGroup: 1000
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    seccompProfile:
+      type: RuntimeDefault
+  
+  # Development Network Policies (Disabled for easier debugging)
+  networkPolicy:
+    enabled: false
+    ingress: []
+    egress: []
+
+# Development Default Values
+replicaCount: 1  # Single replica for all services in dev
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+# Development Service Account Configuration
+serviceAccount:
+  create: true
+  annotations:
+    environment: "development"
+  name: ""
+  automountServiceAccountToken: true  # Enabled for dev debugging
+
+# Development Pod Configuration
+podAnnotations:
+  prometheus.io/scrape: "true"
+  prometheus.io/port: "8080"
+  prometheus.io/path: "/actuator/prometheus"
+  environment: "development"
+  deployment-time: ""
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 1000
+  runAsGroup: 1000
+  fsGroup: 1000
+
+securityContext:
+  allowPrivilegeEscalation: false
+  capabilities:
+    drop:
+      - ALL
+  readOnlyRootFilesystem: false  # Disabled for dev debugging
+  runAsNonRoot: true
+  runAsUser: 1000
+  seccompProfile:
+    type: RuntimeDefault
+
+# Development Service Configuration
+service:
+  type: ClusterIP
+  port: 80
+  targetPort: 8080
+  annotations:
+    environment: "development"
+
+# Development Resource Configuration (Optimized for dev)
+resources:
+  requests:
+    cpu: "100m"    # Lower CPU for dev
+    memory: "256Mi" # Lower memory for dev
+  limits:
+    cpu: "500m"
+    memory: "1Gi"
+
+# Autoscaling Disabled for Development
+autoscaling:
+  enabled: false
+  minReplicas: 1
+  maxReplicas: 1
+
+# Pod Disruption Budget Disabled for Development
+podDisruptionBudget:
+  enabled: false
+
+# Development Node Selection and Scheduling
+nodeSelector:
+  environment: "development"
+tolerations: []
+affinity: {}
+
+# =============================================================================
+# MICROSERVICES DEVELOPMENT CONFIGURATION
+# =============================================================================
+
+# API Gateway Service - Development Configuration
+api-gateway:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/api-gateway
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8080
+    targetPort: 8080
+    annotations:
+      environment: "development"
+  
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "512Mi"
+    limits:
+      cpu: "500m"
+      memory: "1Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs: DEBUG
+        org.springframework: INFO
+    
+    # Rate Limiting Disabled for Dev Testing
+    rate_limit_enabled: false
+    rateLimit:
+      enabled: false
+      requestsPerSecond: 10000
+    
+    # CORS Configuration for Development
+    cors:
+      enabled: true
+      allowedOrigins: "*"
+      allowedMethods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+      allowedHeaders: "*"
+      allowCredentials: true
+    
+    # Development Timeout Configuration
+    timeout:
+      connect: 30s
+      response: 120s
+    
+    # Development Circuit Breaker Configuration
+    circuitBreaker:
+      enabled: false  # Disabled for dev debugging
+    
+    # Development Health Check Configuration
+    health:
+      enabled: true
+      endpoint: "/health"
+      interval: 30s
+
+# Service Discovery Service - Development Configuration
+discovery-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/discovery-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8761
+    targetPort: 8761
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  config:
+    log_level: "DEBUG"
+    eurekaServer:
+      enableSelfPreservation: false
+      renewalPercentThreshold: 0.49  # Lower threshold for dev
+      evictionIntervalTimerInMs: 2000
+
+# Configuration Server - Development Configuration
+config-server:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/config-server
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8888
+    targetPort: 8888
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  config:
+    log_level: "DEBUG"
+    git:
+      uri: "https://github.com/ufs/config-repo"
+      searchPaths: "config/{application}/dev"
+      timeout: 30
+      branch: "develop"
+    security:
+      user:
+        name: "admin"
+        password: "dev-password"
+
+# Authentication Service - Development Configuration
+auth-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/auth-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 9000
+    targetPort: 9000
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  database:
+    name: "auth_db_dev"
+    host: "postgresql-dev"
+    port: 5432
+    username: "auth_user_dev"
+    password: "dev-password"
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.auth: DEBUG
+        org.springframework.security: DEBUG
+    
+    # Development JWT Configuration
+    jwt:
+      secret: "dev-secret-key"
+      expiration: 7200  # 2 hours for dev
+      refreshExpiration: 172800  # 2 days for dev
+      algorithm: "HS256"
+    
+    # Development OAuth2 Configuration
+    oauth2:
+      clients:
+        - clientId: "dev-client"
+          clientSecret: "dev-secret"
+          scopes: ["read", "write"]
+          grantTypes: ["authorization_code", "refresh_token"]
+          redirectUris: ["http://localhost:3000/callback"]
+    
+    # Development Security Configuration
+    security:
+      bcrypt:
+        rounds: 4  # Lower rounds for faster dev testing
+      sessionTimeout: 3600
+    
+    # Development Rate Limiting
+    rateLimit:
+      enabled: false  # Disabled for dev testing
+
+# Customer Service - Development Configuration
+customer-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/customer-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8081
+    targetPort: 8081
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  database:
+    name: "customer_db_dev"
+    host: "postgresql-dev"
+    port: 5432
+    username: "customer_user_dev"
+    password: "dev-password"
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.customer: DEBUG
+        org.springframework.data: DEBUG
+    
+    # Development KYC Configuration
+    kyc:
+      enabled: true
+      providers:
+        - name: "mock-jumio"
+          endpoint: "http://mock-kyc-service:8080"
+          apiKey: "dev-api-key"
+          timeout: 30000
+      mockMode: true  # Use mock KYC for development
+    
+    # Development Cache Configuration
+    cache:
+      enabled: true
+      ttl: 60  # Shorter TTL for dev
+      provider: "redis"
+      keyPrefix: "customer:dev:"
+    
+    # Development Validation Configuration
+    validation:
+      strictMode: false  # Relaxed validation for dev
+      skipDocumentValidation: true
+    
+    # Development Notification Configuration
+    notifications:
+      enabled: true
+      mockMode: true
+
+# Risk Assessment Service - Development Configuration
+risk-assessment-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/risk-assessment-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8082
+    targetPort: 8082
+  
+  resources:
+    requests:
+      cpu: "300m"
+      memory: "1Gi"
+    limits:
+      cpu: "600m"
+      memory: "2Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.risk: DEBUG
+        tensorflow: INFO
+    
+    # Development ML Configuration
+    ml:
+      modelPath: "/models/dev"
+      tensorflowVersion: "2.15"
+      batchSize: 16  # Smaller batch size for dev
+      timeout: 60000  # Longer timeout for dev debugging
+      mockMode: true  # Use mock ML models for development
+    
+    # Development Risk Configuration
+    risk:
+      scoreThreshold: 0.5  # Lower threshold for dev testing
+      categories:
+        - low
+        - medium
+        - high
+        - critical
+      mockScores: true  # Return mock risk scores for dev
+    
+    # Development Data Sources
+    dataSources:
+      external:
+        enabled: false  # Disable external data sources for dev
+      mock:
+        enabled: true   # Enable mock data sources
+    
+    # Development Model Training
+    training:
+      enabled: false  # Disable training in dev
+      mockResults: true
+
+# Compliance Service - Development Configuration
+compliance-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/compliance-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8083
+    targetPort: 8083
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.compliance: DEBUG
+    
+    # Development Regulatory Configuration
+    regulatory:
+      frameworks:
+        - basel3
+        - basel4
+        - psd3
+        - gdpr
+        - sox
+      updateInterval: "1h"  # More frequent updates for dev
+      mockMode: true  # Use mock regulatory data
+    
+    # Development Monitoring Configuration
+    monitoring:
+      enabled: true
+      alertThreshold: 0.8  # Lower threshold for dev
+      mockAlerts: true
+    
+    # Development Rule Engine Configuration
+    ruleEngine:
+      enabled: true
+      mockRules: true
+      cacheEnabled: false  # Disable caching for dev
+
+# Transaction Service - Development Configuration
+transaction-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/transaction-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8084
+    targetPort: 8084
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.transaction: DEBUG
+        org.springframework.transaction: DEBUG
+    
+    # Development Processing Configuration
+    processing:
+      batchSize: 100  # Smaller batch size for dev
+      timeout: 30000  # Longer timeout for dev debugging
+      retryAttempts: 2  # Fewer retries for faster dev testing
+      asyncProcessing: false  # Synchronous for easier debugging
+    
+    # Development Validation Configuration
+    validation:
+      enabled: true
+      strictMode: false  # Relaxed validation for dev
+      mockValidation: true
+    
+    # Development Settlement Configuration
+    settlement:
+      enabled: false  # Disable real settlement for dev
+      mockMode: true
+    
+    # Development Fraud Detection Configuration
+    fraudDetection:
+      enabled: true
+      mockMode: true
+      threshold: 0.3  # Lower threshold for dev testing
+
+# Analytics Service - Development Configuration
+analytics-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/analytics-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8085
+    targetPort: 8085
+  
+  resources:
+    requests:
+      cpu: "250m"
+      memory: "1Gi"
+    limits:
+      cpu: "500m"
+      memory: "2Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.analytics: DEBUG
+        org.apache.spark: WARN
+    
+    # Development Spark Configuration
+    spark:
+      enabled: false  # Disable Spark for dev (use local processing)
+      executorMemory: "512m"  # Smaller memory for dev
+      driverMemory: "256m"
+      localMode: true
+    
+    # Development Streaming Configuration
+    streaming:
+      enabled: true
+      windowSize: "1m"  # Smaller window for dev
+      watermark: "30s"
+      mockData: true  # Use mock streaming data
+    
+    # Development Data Processing Configuration
+    dataProcessing:
+      batchSize: 50  # Smaller batch size for dev
+      realTimeEnabled: false  # Disable real-time for dev
+      mockResults: true
+    
+    # Development Reporting Configuration
+    reporting:
+      enabled: true
+      schedule: "*/5 * * * *"  # Every 5 minutes for dev
+      mockReports: true
+
+# Financial Wellness Service - Development Configuration
+financial-wellness-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/financial-wellness-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 8086
+    targetPort: 8086
+  
+  resources:
+    requests:
+      cpu: "200m"
+      memory: "512Mi"
+    limits:
+      cpu: "400m"
+      memory: "1Gi"
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        root: DEBUG
+        com.ufs.wellness: DEBUG
+    
+    # Development Recommendations Configuration
+    recommendations:
+      enabled: true
+      refreshInterval: "5m"  # More frequent refresh for dev
+      mockRecommendations: true
+      algorithm: "simple"  # Use simple algorithm for dev
+    
+    # Development Goals Configuration
+    goals:
+      types:
+        - savings
+        - investment
+        - debt-reduction
+        - retirement
+      mockGoals: true
+      validationEnabled: false  # Disable validation for dev
+    
+    # Development AI Configuration
+    ai:
+      enabled: false  # Disable AI for dev
+      mockInsights: true
+
+# AI Service - Development Configuration
+ai-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/ai-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 5000
+    targetPort: 5000
+  
+  resources:
+    requests:
+      cpu: "500m"
+      memory: "2Gi"
+    limits:
+      cpu: "1000m"
+      memory: "4Gi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        DEBUG
+    
+    # Development Model Configuration
+    model_path: "/models/dev"
+    models:
+      tensorflow:
+        version: "2.15"
+        gpuEnabled: false
+        mockMode: true  # Use mock models for dev
+      pytorch:
+        version: "2.1"
+        mockMode: true
+    
+    # Development Inference Configuration
+    inference:
+      timeout: 60000  # Longer timeout for dev debugging
+      batchSize: 8    # Smaller batch size for dev
+      mockInference: true
+    
+    # Development Explainability Configuration
+    explainability:
+      enabled: true
+      method: "mock"  # Use mock explainability for dev
+    
+    # Development Training Configuration
+    training:
+      enabled: false  # Disable training in dev
+      mockTraining: true
+
+# Blockchain Service - Development Configuration
+blockchain-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/blockchain-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 3000
+    targetPort: 3000
+  
+  resources:
+    requests:
+      cpu: "300m"
+      memory: "1Gi"
+    limits:
+      cpu: "600m"
+      memory: "2Gi"
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        DEBUG
+    
+    # Development Hyperledger Configuration
+    hyperledger:
+      fabric:
+        version: "2.5"
+        channelName: "financial-channel-dev"
+        chaincodeName: "financial-contract-dev"
+        mockMode: true  # Use mock blockchain for dev
+      network:
+        organizations: 1  # Single org for dev
+        peersPerOrg: 1    # Single peer for dev
+    
+    # Development Consensus Configuration
+    consensus:
+      algorithm: "solo"  # Solo consensus for dev
+      batchTimeout: "5s"  # Longer timeout for dev
+      maxMessageCount: 10  # Smaller batch for dev
+    
+    # Development Smart Contract Configuration
+    smartContracts:
+      enabled: false  # Disable smart contracts for dev
+      mockContracts: true
+
+# Notification Service - Development Configuration
+notification-service:
+  enabled: true
+  replicaCount: 1
+  image:
+    repository: ufs/notification-service
+    pullPolicy: Always
+    tag: "latest-dev"
+  
+  service:
+    type: ClusterIP
+    port: 3001
+    targetPort: 3001
+  
+  resources:
+    requests:
+      cpu: "150m"
+      memory: "256Mi"
+    limits:
+      cpu: "300m"
+      memory: "512Mi"
+  
+  autoscaling:
+    enabled: false
+  
+  config:
+    # Development Logging Configuration
+    log_level: "DEBUG"
+    logging:
+      level:
+        DEBUG
+    
+    # Development Notification Channels Configuration
+    channels:
+      email:
+        enabled: true
+        provider: "mock-smtp"  # Use mock SMTP for dev
+        host: "mailhog"
+        port: 1025
+        username: "dev"
+        password: "dev"
+        mockMode: true
+      sms:
+        enabled: true
+        provider: "mock-twilio"  # Use mock SMS for dev
+        accountSid: "dev-account-sid"
+        authToken: "dev-auth-token"
+        mockMode: true
+      push:
+        enabled: true
+        provider: "mock-fcm"  # Use mock FCM for dev
+        serverKey: "dev-server-key"
+        mockMode: true
+      webhook:
+        enabled: true
+        mockMode: true
+    
+    # Development Template Configuration
+    templates:
+      path: "/templates"
+      cache: false  # Disable caching for dev
+      mockTemplates: true
+    
+    # Development Queue Configuration
+    queue:
+      enabled: false  # Disable queue for dev (process immediately)
+      mockQueue: true
+
+# =============================================================================
+# DEVELOPMENT INGRESS CONFIGURATION
+# =============================================================================
+
+# Development Ingress Configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    nginx.ingress.kubernetes.io/rewrite-target: "/"
+    nginx.ingress.kubernetes.io/ssl-redirect: "false"  # Disabled for dev
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "false"
+    cert-manager.io/cluster-issuer: "letsencrypt-dev"
+    nginx.ingress.kubernetes.io/cors-allow-origin: "*"
+    nginx.ingress.kubernetes.io/cors-allow-methods: "GET, POST, PUT, DELETE, OPTIONS"
+    nginx.ingress.kubernetes.io/cors-allow-headers: "DNT,User-Agent,X-Requested-With,If-Modified-Since,Cache-Control,Content-Type,Range,Authorization"
+    nginx.ingress.kubernetes.io/enable-cors: "true"
+    nginx.ingress.kubernetes.io/rate-limit: "1000"  # Higher rate limit for dev
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+  hosts:
+    - host: "api.dev.ufs.com"
+      paths:
+        - path: "/"
+          pathType: "ImplementationSpecific"
+          backend:
+            service:
+              name: "api-gateway"
+              port:
+                number: 8080
+    - host: "auth.dev.ufs.com"
+      paths:
+        - path: "/"
+          pathType: "ImplementationSpecific"
+          backend:
+            service:
+              name: "auth-service"
+              port:
+                number: 9000
+    - host: "discovery.dev.ufs.com"
+      paths:
+        - path: "/"
+          pathType: "ImplementationSpecific"
+          backend:
+            service:
+              name: "discovery-service"
+              port:
+                number: 8761
+  tls:
+    - hosts:
+        - "api.dev.ufs.com"
+        - "auth.dev.ufs.com"
+        - "discovery.dev.ufs.com"
+      secretName: "ufs-dev-tls"
+
+# =============================================================================
+# DEVELOPMENT MONITORING AND OBSERVABILITY
+# =============================================================================
+
+# Development Prometheus Configuration
+prometheus:
+  enabled: true
+  serviceMonitor:
+    enabled: true
+    namespace: monitoring
+    interval: 15s  # More frequent scraping for dev
+    scrapeTimeout: 10s
+    additionalLabels:
+      environment: "development"
+  
+  rules:
+    enabled: false  # Disable alerting rules for dev
+    namespace: monitoring
+    additionalLabels:
+      environment: "development"
+
+# Development Grafana Dashboard Configuration
+grafana:
+  enabled: true
+  dashboards:
+    enabled: true
+    namespace: monitoring
+    configMapAnnotations:
+      grafana_folder: "Financial Services Dev"
+      environment: "development"
+
+# Development Jaeger Tracing Configuration
+jaeger:
+  enabled: true
+  agent:
+    host: "jaeger-agent"
+    port: 6831
+  collector:
+    endpoint: "http://jaeger-collector:14268/api/traces"
+  
+  sampling:
+    type: "const"  # Sample all traces in dev
+    param: 1
+
+# Development Logging Configuration
+logging:
+  level:
+    root: DEBUG
+    com.ufs: DEBUG
+    org.springframework: INFO
+    org.hibernate: INFO
+  
+  logstash:
+    enabled: false  # Disable logstash for dev (use console)
+    host: "logstash-dev"
+    port: 5044
+  
+  console:
+    enabled: true  # Enable console logging for dev
+  
+  format: json
+  includeRequestId: true
+  includeMdc: true
+  includeStackTrace: true  # Include stack traces for dev debugging
+
+# =============================================================================
+# DEVELOPMENT EXTERNAL DEPENDENCIES
+# =============================================================================
+
+# Development PostgreSQL Configuration
+postgresql-ha:
+  enabled: false  # Use external dev PostgreSQL instance
+
+# Development MongoDB Configuration
+mongodb:
+  enabled: false  # Use external dev MongoDB instance
+
+# Development Redis Configuration
+redis:
+  enabled: false  # Use external dev Redis instance
+
+# Development Kafka Configuration
+kafka:
+  enabled: false  # Use external dev Kafka instance
+
+# Development InfluxDB Configuration
+influxdb:
+  enabled: false  # Use external dev InfluxDB instance
+
+# =============================================================================
+# DEVELOPMENT TESTING AND DEBUGGING
+# =============================================================================
+
+# Development Testing Configuration
+testing:
+  enabled: true
+  mockServices:
+    enabled: true
+    endpoints:
+      - name: "mock-payment-gateway"
+        url: "http://mock-payment:8080"
+      - name: "mock-kyc-service"
+        url: "http://mock-kyc:8080"
+      - name: "mock-credit-bureau"
+        url: "http://mock-credit:8080"
+  
+  # Development Database Seeding
+  dataSeed:
+    enabled: true
+    customers: 100
+    transactions: 1000
+    accounts: 200
+
+# Development Debugging Configuration
+debugging:
+  enabled: true
+  remotePorts:
+    api-gateway: 5005
+    auth-service: 5006
+    customer-service: 5007
+    transaction-service: 5008
+    risk-assessment-service: 5009
+    compliance-service: 5010
+    analytics-service: 5011
+    financial-wellness-service: 5012
+    ai-service: 5013
+    blockchain-service: 5014
+    notification-service: 5015
+  
+  # Development Profiling
+  profiling:
+    enabled: true
+    tool: "async-profiler"
+    port: 9999
+
+# Development Health Checks Configuration
+healthChecks:
+  enabled: true
+  initialDelaySeconds: 30
+  periodSeconds: 30
+  timeoutSeconds: 10
+  failureThreshold: 5
+  successThreshold: 1
+
+# Development Backup Configuration (Disabled)
+backup:
+  enabled: false
+
+# Development Disaster Recovery Configuration (Disabled)
+disasterRecovery:
+  enabled: false
+
+# Development Security Scanning Configuration (Mock)
+securityScanning:
+  enabled: true
+  mockMode: true
+  schedule: "0 */6 * * *"  # Every 6 hours for dev
+
+# Development Compliance Reporting Configuration (Mock)
+complianceReporting:
+  enabled: true
+  mockMode: true
+  schedule: "0 9 * * MON"  # Weekly for dev
+
+# =============================================================================
+# DEVELOPMENT ENVIRONMENT CLEANUP
+# =============================================================================
+
+# Development Resource Cleanup Configuration
+cleanup:
+  enabled: true
+  schedule: "0 2 * * *"  # Daily cleanup at 2 AM
+  retentionDays: 7  # Keep logs and data for 7 days in dev
+  
+  # Development Data Cleanup
+  data:
+    logs: true
+    metrics: true
+    traces: true
+    tempFiles: true
+  
+  # Development Image Cleanup
+  images:
+    enabled: true
+    keepLatest: 5  # Keep only 5 latest images per service
+
+# Development Feature Flags Configuration
+featureFlags:
+  enabled: true
+  provider: "mock"
+  flags:
+    newRiskEngine: true
+    advancedAnalytics: false
+    blockchainSettlement: false
+    aiRecommendations: true
+    enhancedSecurity: false

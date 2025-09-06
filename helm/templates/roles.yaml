@@ -1,0 +1,281 @@
+{{/*
+Unified Financial Services Platform - Kubernetes RBAC Roles Template
+This template dynamically creates Role resources for each microservice defined in values.yaml,
+implementing fine-grained permissions based on the principle of least privilege for financial services compliance.
+
+The template supports:
+- Conditional creation based on RBAC configuration
+- Dynamic role generation for each microservice
+- Service-specific permission rules
+- Financial services security standards compliance
+- Audit trail support through proper labeling and annotations
+*/}}
+
+{{- if .Values.rbac.create -}}
+{{- range $serviceName, $serviceConfig := .Values.services }}
+{{- if $serviceConfig.enabled -}}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "ufs.fullname" $ }}-{{ $serviceName }}
+  namespace: {{ $.Release.Namespace }}
+  labels:
+    {{- include "ufs.labels" $ | nindent 4 }}
+    app.kubernetes.io/component: {{ $serviceName }}
+    ufs.platform/service-name: {{ $serviceName | quote }}
+    ufs.platform/rbac-type: "service-role"
+  annotations:
+    {{- include "ufs.annotations" $ | nindent 4 }}
+    ufs.platform/created-for: {{ $serviceName | quote }}
+    ufs.platform/permission-level: {{ $serviceConfig.rbac.permissionLevel | default "standard" | quote }}
+    ufs.platform/compliance-scope: "financial-services"
+    ufs.platform/audit-required: "true"
+    {{- if $serviceConfig.rbac.annotations }}
+    {{- toYaml $serviceConfig.rbac.annotations | nindent 4 }}
+    {{- end }}
+rules:
+{{- if $serviceConfig.rbac.rules }}
+  {{- toYaml $serviceConfig.rbac.rules | nindent 2 }}
+{{- else }}
+  # Default rules for financial services microservices based on service type and criticality
+  {{- if eq $serviceName "api-gateway" }}
+  # API Gateway permissions - external traffic management and routing
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses", "networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "discovery-service" }}
+  # Service Discovery permissions - service registry management
+  - apiGroups: [""]
+    resources: ["services", "endpoints", "pods"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "config-server" }}
+  # Configuration Server permissions - centralized configuration management
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "auth-service" }}
+  # Authentication Service permissions - critical security service
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  {{- else if eq $serviceName "customer-service" }}
+  # Customer Service permissions - customer data management
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "risk-assessment-service" }}
+  # Risk Assessment Service permissions - AI/ML model access and high-performance computing
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Additional permissions for ML model management
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch"]
+  {{- else if eq $serviceName "compliance-service" }}
+  # Compliance Service permissions - regulatory compliance monitoring
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch"]
+  # Additional permissions for audit log access
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  {{- else if eq $serviceName "transaction-service" }}
+  # Transaction Service permissions - financial transaction processing
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "analytics-service" }}
+  # Analytics Service permissions - data processing and analytics
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Additional permissions for batch processing
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create"]
+  {{- else if eq $serviceName "financial-wellness-service" }}
+  # Financial Wellness Service permissions - customer financial insights
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- else if eq $serviceName "ai-service" }}
+  # AI Service permissions - machine learning and AI processing
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # GPU resource access for AI workloads
+  - apiGroups: [""]
+    resources: ["nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["nodes", "pods"]
+    verbs: ["get", "list"]
+  {{- else if eq $serviceName "blockchain-service" }}
+  # Blockchain Service permissions - distributed ledger operations
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  # Additional permissions for peer-to-peer networking
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["networkpolicies"]
+    verbs: ["get", "list", "watch"]
+  {{- else if eq $serviceName "notification-service" }}
+  # Notification Service permissions - event-driven notifications
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch", "get", "list", "watch"]
+  {{- else }}
+  # Default permissions for standard microservices
+  - apiGroups: [""]
+    resources: ["configmaps", "secrets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods", "services", "endpoints"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  {{- end }}
+  
+  # Common permissions for all financial services (audit and monitoring)
+  - apiGroups: [""]
+    resources: ["pods/status", "services/status"]
+    verbs: ["get"]
+  - apiGroups: ["metrics.k8s.io"]
+    resources: ["pods", "services"]
+    verbs: ["get", "list"]
+  
+  {{- if $.Values.rbac.enableAuditAccess }}
+  # Audit access permissions for compliance monitoring
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get", "list"]
+  {{- end }}
+  
+  {{- if and ($.Values.rbac.enableDebugAccess) (eq $.Values.global.environment "development") }}
+  # Debug permissions for development environment only
+  - apiGroups: [""]
+    resources: ["pods/exec", "pods/portforward"]
+    verbs: ["create"]
+  {{- end }}
+{{- end }}
+
+{{- if $serviceConfig.rbac.additionalRules }}
+  # Additional service-specific rules
+  {{- toYaml $serviceConfig.rbac.additionalRules | nindent 2 }}
+{{- end }}
+
+{{- end }}
+{{- end }}
+{{- end }}
