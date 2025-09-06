@@ -1,0 +1,136 @@
+/* 
+ * Global CSS Custom Properties (Variables) for Financial Services Platform
+ * 
+ * This file defines the design system foundation using CSS custom properties
+ * that maintain consistent visual identity across all user interfaces.
+ * 
+ * Design tokens are organized into semantic categories:
+ * - Colors: Primary, secondary, semantic, and neutral color palettes
+ * - Typography: Font families, sizes, weights, and line heights
+ * - Spacing: Consistent spacing scale for layouts and components
+ * - Border Radius: Corner radius values for visual consistency
+ * - Shadows: Elevation system for depth and hierarchy
+ * 
+ * These variables support the platform's enterprise-grade requirements
+ * including accessibility, scalability, and maintainability.
+ */
+
+:root {
+  /* ==========================================================================
+     COLOR SYSTEM
+     ========================================================================== */
+  
+  /* Primary Color Palette - Professional Blue for Financial Trust */
+  --color-primary-50: #e3f2fd;
+  --color-primary-100: #bbdefb;
+  --color-primary-500: #2196f3;
+  --color-primary-700: #1976d2;
+  --color-primary-900: #0d47a1;
+  
+  /* Secondary Color Palette - Accent Purple for Visual Interest */
+  --color-secondary-50: #f3e5f5;
+  --color-secondary-100: #e1bee7;
+  --color-secondary-500: #9c27b0;
+  --color-secondary-700: #7b1fa2;
+  --color-secondary-900: #4a148c;
+  
+  /* Success Color Palette - Green for Positive Actions */
+  --color-success-50: #e8f5e8;
+  --color-success-500: #4caf50;
+  --color-success-700: #388e3c;
+  
+  /* Warning Color Palette - Orange for Cautionary States */
+  --color-warning-50: #fff3e0;
+  --color-warning-500: #ff9800;
+  --color-warning-700: #f57c00;
+  
+  /* Error Color Palette - Red for Error States and Alerts */
+  --color-error-50: #ffebee;
+  --color-error-500: #f44336;
+  --color-error-700: #d32f2f;
+  
+  /* Neutral Color Palette - Grayscale for Text and Backgrounds */
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #eeeeee;
+  --color-neutral-300: #e0e0e0;
+  --color-neutral-400: #bdbdbd;
+  --color-neutral-500: #9e9e9e;
+  --color-neutral-600: #757575;
+  --color-neutral-700: #616161;
+  --color-neutral-800: #424242;
+  --color-neutral-900: #212121;
+  
+  /* ==========================================================================
+     TYPOGRAPHY SYSTEM
+     ========================================================================== */
+  
+  /* Font Families - Professional Typography Stack */
+  --font-family-primary: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-family-monospace: 'JetBrains Mono', 'Fira Code', monospace;
+  
+  /* Font Sizes - Harmonious Scale for Hierarchical Typography */
+  --font-size-xs: 0.75rem;    /* 12px - Fine print, labels */
+  --font-size-sm: 0.875rem;   /* 14px - Body text, form inputs */
+  --font-size-base: 1rem;     /* 16px - Base body text */
+  --font-size-lg: 1.125rem;   /* 18px - Larger body text */
+  --font-size-xl: 1.25rem;    /* 20px - Small headings */
+  --font-size-2xl: 1.5rem;    /* 24px - Medium headings */
+  --font-size-3xl: 1.875rem;  /* 30px - Large headings */
+  --font-size-4xl: 2.25rem;   /* 36px - Display headings */
+  
+  /* Font Weights - Text Hierarchy and Emphasis */
+  --font-weight-normal: 400;    /* Regular text */
+  --font-weight-medium: 500;    /* Medium emphasis */
+  --font-weight-semibold: 600;  /* Strong emphasis */
+  --font-weight-bold: 700;      /* Bold headings */
+  
+  /* Line Heights - Optimal Reading Experience */
+  --line-height-tight: 1.25;    /* Tight spacing for headings */
+  --line-height-normal: 1.5;    /* Normal reading spacing */
+  --line-height-relaxed: 1.75;  /* Relaxed spacing for readability */
+  
+  /* ==========================================================================
+     SPACING SYSTEM
+     ========================================================================== */
+  
+  /* Spacing Scale - Consistent Layout and Component Spacing */
+  --spacing-0: 0;          /* No spacing */
+  --spacing-1: 0.25rem;    /* 4px - Tight spacing */
+  --spacing-2: 0.5rem;     /* 8px - Small spacing */
+  --spacing-3: 0.75rem;    /* 12px - Medium-small spacing */
+  --spacing-4: 1rem;       /* 16px - Base spacing unit */
+  --spacing-5: 1.25rem;    /* 20px - Medium spacing */
+  --spacing-6: 1.5rem;     /* 24px - Medium-large spacing */
+  --spacing-8: 2rem;       /* 32px - Large spacing */
+  --spacing-10: 2.5rem;    /* 40px - Extra large spacing */
+  --spacing-12: 3rem;      /* 48px - Section spacing */
+  --spacing-16: 4rem;      /* 64px - Page section spacing */
+  --spacing-20: 5rem;      /* 80px - Major section spacing */
+  --spacing-24: 6rem;      /* 96px - Page-level spacing */
+  
+  /* ==========================================================================
+     BORDER RADIUS SYSTEM
+     ========================================================================== */
+  
+  /* Border Radius - Consistent Corner Treatments */
+  --border-radius-none: 0;         /* Sharp corners */
+  --border-radius-sm: 0.125rem;    /* 2px - Subtle rounding */
+  --border-radius-base: 0.25rem;   /* 4px - Standard rounding */
+  --border-radius-md: 0.375rem;    /* 6px - Medium rounding */
+  --border-radius-lg: 0.5rem;      /* 8px - Large rounding */
+  --border-radius-xl: 0.75rem;     /* 12px - Extra large rounding */
+  --border-radius-2xl: 1rem;       /* 16px - Very large rounding */
+  --border-radius-full: 9999px;    /* Fully rounded (pills, avatars) */
+  
+  /* ==========================================================================
+     SHADOW SYSTEM
+     ========================================================================== */
+  
+  /* Box Shadows - Elevation and Depth Hierarchy */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+  --shadow-xl: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+}
