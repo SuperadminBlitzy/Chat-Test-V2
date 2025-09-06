@@ -1,0 +1,315 @@
+# =============================================================================
+# API Gateway Test Configuration
+# =============================================================================
+# This configuration file provides test-specific settings for the API Gateway
+# service, overriding production configurations to create an isolated testing
+# environment with disabled external dependencies and enhanced debugging.
+# =============================================================================
+
+# Server Configuration
+# Random port assignment for parallel test execution
+server:
+  port: 0
+  shutdown: graceful
+
+# Spring Application Configuration
+spring:
+  application:
+    name: api-gateway
+  
+  # Profile Configuration
+  profiles:
+    active: test
+  
+  # Cloud Configuration - Disabled for Test Isolation
+  cloud:
+    # Disable config server for test environment
+    config:
+      enabled: false
+      discovery:
+        enabled: false
+    
+    # Gateway Configuration
+    gateway:
+      # Disable service discovery for test isolation
+      discovery:
+        locator:
+          enabled: false
+          lower-case-service-id: true
+      
+      # Test-specific route configurations
+      routes:
+        - id: test-route
+          uri: http://localhost:8080
+          predicates:
+            - Path=/test/**
+          filters:
+            - StripPrefix=1
+      
+      # Global filters for testing
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allowCredentials: false
+      
+      # HTTP client configuration for testing
+      httpclient:
+        connect-timeout: 5000
+        response-timeout: 10s
+  
+  # Web Configuration
+  webflux:
+    base-path: /api/v1
+  
+  # Security Configuration for Testing
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Test OAuth2 issuer URI
+          issuer-uri: http://localhost:8082/realms/ufs
+          jwk-set-uri: http://localhost:8082/realms/ufs/protocol/openid-connect/certs
+    
+    # Test-specific user configuration
+    user:
+      name: test-user
+      password: test-password
+      roles:
+        - USER
+        - ADMIN
+  
+  # Test Database Configuration
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: 
+    driver-class-name: org.h2.Driver
+  
+  # JPA Configuration for Testing
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        use_sql_comments: true
+  
+  # H2 Console for Test Debugging
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+  
+  # Redis Configuration for Testing (Embedded)
+  redis:
+    host: localhost
+    port: 6370
+    timeout: 2000ms
+    database: 1
+  
+  # Kafka Configuration for Testing (Disabled)
+  kafka:
+    enabled: false
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: api-gateway-test
+      auto-offset-reset: earliest
+  
+  # Cache Configuration for Testing
+  cache:
+    type: simple
+    cache-names:
+      - test-cache
+      - rate-limit-cache
+
+# Service Discovery Configuration - Disabled for Testing
+eureka:
+  client:
+    enabled: false
+    register-with-eureka: false
+    fetch-registry: false
+  instance:
+    prefer-ip-address: false
+
+# Logging Configuration for Test Debugging
+logging:
+  level:
+    # API Gateway specific logging
+    com.ufs.apigateway: DEBUG
+    
+    # Spring Cloud Gateway logging
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.gateway.filter: DEBUG
+    org.springframework.cloud.gateway.route: DEBUG
+    org.springframework.cloud.gateway.handler: DEBUG
+    
+    # Reactor Netty logging for network debugging
+    reactor.netty.http.client: DEBUG
+    reactor.netty.http.server: DEBUG
+    
+    # Spring Security logging
+    org.springframework.security: DEBUG
+    org.springframework.security.oauth2: DEBUG
+    
+    # Spring Web logging
+    org.springframework.web: DEBUG
+    org.springframework.webflux: DEBUG
+    
+    # HTTP request/response logging
+    org.springframework.web.reactive.function.client: DEBUG
+    
+    # Test framework logging
+    org.springframework.test: DEBUG
+    org.springframework.boot.test: DEBUG
+    
+    # Root logging level
+    root: INFO
+  
+  # Log pattern for test environment
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+
+# Resilience4j Configuration for Testing
+resilience4j:
+  # Rate Limiter Configuration
+  ratelimiter:
+    instances:
+      global-rate-limiter:
+        limitForPeriod: 100
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0
+        registerHealthIndicator: true
+      
+      test-rate-limiter:
+        limitForPeriod: 10
+        limitRefreshPeriod: 1s
+        timeoutDuration: 100ms
+  
+  # Circuit Breaker Configuration for Testing
+  circuitbreaker:
+    instances:
+      test-circuit-breaker:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+  
+  # Retry Configuration for Testing
+  retry:
+    instances:
+      test-retry:
+        maxAttempts: 3
+        waitDuration: 100ms
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+  
+  # Time Limiter Configuration
+  timelimiter:
+    instances:
+      test-time-limiter:
+        timeoutDuration: 2s
+        cancelRunningFuture: true
+
+# Management and Actuator Configuration for Testing
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"
+      base-path: /actuator
+  
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    
+    info:
+      enabled: true
+    
+    metrics:
+      enabled: true
+    
+    gateway:
+      enabled: true
+  
+  metrics:
+    export:
+      prometheus:
+        enabled: false
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+  
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+
+# Test-specific Custom Properties
+test:
+  properties:
+    # Test data configuration
+    data:
+      load-test-data: true
+      test-users: 10
+      test-transactions: 100
+    
+    # Test timeout configurations
+    timeouts:
+      connection: 5000
+      read: 10000
+      write: 10000
+    
+    # Test security settings
+    security:
+      disable-csrf: true
+      allow-all-origins: true
+      test-jwt-secret: test-secret-key-for-testing-only
+    
+    # Mock service configurations
+    mock-services:
+      enabled: true
+      payment-service-url: http://localhost:8081
+      user-service-url: http://localhost:8082
+      notification-service-url: http://localhost:8083
+
+# OpenAPI/Swagger Configuration for Testing
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operationsSorter: method
+    tagsSorter: alpha
+  
+  show-actuator: true
+  show-spring-cloud-functions: true
+
+# Test-specific WebClient Configuration
+webclient:
+  test:
+    base-url: http://localhost:8080
+    timeout: 5000
+    max-in-memory-size: 1MB
+    codecs:
+      max-in-memory-size: 1MB
+
+# JVM and Performance Configuration for Testing
+jvm:
+  test:
+    heap-size: 512m
+    gc-algorithm: G1GC
+    enable-flight-recorder: false

@@ -1,0 +1,893 @@
+# Production Configuration for API Gateway Service
+# Unified Financial Services Platform - Production Environment
+# This configuration ensures compliance with SOC2, PCI-DSS, and GDPR requirements
+# while supporting sub-second response times and 99.99% uptime SLA
+
+server:
+  port: 8080
+  # Production HTTP/2 and compression settings for optimal performance
+  http2:
+    enabled: true
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
+  # Connection timeout optimizations for high-throughput financial transactions
+  tomcat:
+    connection-timeout: 20000
+    max-connections: 10000
+    max-threads: 200
+    min-spare-threads: 10
+    accept-count: 100
+    # Enable access logging for audit compliance
+    accesslog:
+      enabled: true
+      directory: /var/log/tomcat
+      pattern: '%h %l %u %t "%r" %s %b %D %{User-Agent}i'
+      file-date-format: .yyyy-MM-dd
+      max-days: 90
+
+spring:
+  application:
+    name: api-gateway
+  
+  # Production profile configurations
+  profiles:
+    active: prod
+  
+  # Spring Cloud Gateway Configuration
+  cloud:
+    gateway:
+      # Service discovery integration for automatic route discovery
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+          # Rate limiting for discovered services
+          predicates:
+            - name: Path
+              args:
+                pattern: "'/'+serviceId.toLowerCase()+'/**'"
+            - name: RateLimit
+              args:
+                rate-limit: 1000
+      
+      # Production route configurations with enhanced resilience patterns
+      routes:
+        # Authentication Service Route
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/auth/**
+          filters:
+            # Request size limit for security
+            - name: RequestSize
+              args:
+                maxSize: 1MB
+            # Rate limiting specific to auth service
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@authRateLimiter}"
+                key-resolver: "#{@ipKeyResolver}"
+            # Circuit breaker for auth service resilience
+            - name: CircuitBreaker
+              args:
+                name: auth-service-cb
+                fallbackUri: forward:/fallback/auth
+            # Security headers for compliance
+            - name: SecureHeaders
+            # Request/Response logging for audit trails
+            - name: RequestLogging
+              args:
+                include-headers: true
+                include-payload: false
+          # Route-specific metadata for monitoring
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 5000
+            circuit-breaker:
+              failure-rate-threshold: 50
+              slow-call-duration-threshold: 2000
+        
+        # Customer Service Route - Critical for onboarding performance
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/customers/**,/onboarding/**
+          filters:
+            - name: RequestSize
+              args:
+                maxSize: 5MB
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@customerRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: customer-service-cb
+                fallbackUri: forward:/fallback/customer
+            - name: SecureHeaders
+            - name: RequestLogging
+              args:
+                include-headers: true
+                include-payload: true
+            # Customer service specific retry policy
+            - name: Retry
+              args:
+                retries: 3
+                statuses: BAD_GATEWAY,GATEWAY_TIMEOUT
+                methods: GET,POST
+                backoff:
+                  firstBackoff: 50ms
+                  maxBackOff: 500ms
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 3000
+        
+        # Transaction Service Route - Critical for payment processing
+        - id: transaction-service
+          uri: lb://transaction-service
+          predicates:
+            - Path=/transactions/**,/payments/**
+          filters:
+            - name: RequestSize
+              args:
+                maxSize: 2MB
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@transactionRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: transaction-service-cb
+                fallbackUri: forward:/fallback/transaction
+            - name: SecureHeaders
+            # Enhanced security for financial transactions
+            - name: ModifyRequestBody
+              args:
+                inClass: "#{T(java.lang.String)}"
+                outClass: "#{T(java.lang.String)}"
+                rewriteFunction: "#{@transactionSecurityFilter}"
+            - name: RequestLogging
+              args:
+                include-headers: true
+                include-payload: true
+          metadata:
+            connect-timeout: 500
+            response-timeout: 2000
+        
+        # Risk Assessment Service Route
+        - id: risk-assessment-service
+          uri: lb://risk-assessment-service
+          predicates:
+            - Path=/risk/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@riskRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: risk-service-cb
+                fallbackUri: forward:/fallback/risk
+            - name: SecureHeaders
+            - name: RequestLogging
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 4000
+        
+        # Compliance Service Route - Regulatory requirement
+        - id: compliance-service
+          uri: lb://compliance-service
+          predicates:
+            - Path=/compliance/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@complianceRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: compliance-service-cb
+                fallbackUri: forward:/fallback/compliance
+            - name: SecureHeaders
+            - name: RequestLogging
+              args:
+                include-headers: true
+                include-payload: true
+            # Additional compliance-specific filters
+            - name: AuditLog
+              args:
+                enabled: true
+                include-request: true
+                include-response: true
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 5000
+        
+        # Financial Wellness Service Route
+        - id: financial-wellness-service
+          uri: lb://financial-wellness-service
+          predicates:
+            - Path=/wellness/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@wellnessRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: wellness-service-cb
+                fallbackUri: forward:/fallback/wellness
+            - name: SecureHeaders
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 3000
+        
+        # Analytics Service Route
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/analytics/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@analyticsRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: analytics-service-cb
+                fallbackUri: forward:/fallback/analytics
+            - name: SecureHeaders
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 6000
+        
+        # Blockchain Service Route
+        - id: blockchain-service
+          uri: lb://blockchain-service
+          predicates:
+            - Path=/blockchain/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@blockchainRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: blockchain-service-cb
+                fallbackUri: forward:/fallback/blockchain
+            - name: SecureHeaders
+          metadata:
+            connect-timeout: 2000
+            response-timeout: 10000
+        
+        # Notification Service Route
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/notifications/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@notificationRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: notification-service-cb
+                fallbackUri: forward:/fallback/notification
+            - name: SecureHeaders
+          metadata:
+            connect-timeout: 1000
+            response-timeout: 3000
+        
+        # AI Service Route
+        - id: ai-service
+          uri: lb://ai-service
+          predicates:
+            - Path=/ai/**
+          filters:
+            - name: RequestRateLimiter
+              args:
+                rate-limiter: "#{@aiRateLimiter}"
+                key-resolver: "#{@userKeyResolver}"
+            - name: CircuitBreaker
+              args:
+                name: ai-service-cb
+                fallbackUri: forward:/fallback/ai
+            - name: SecureHeaders
+          metadata:
+            connect-timeout: 2000
+            response-timeout: 8000
+      
+      # Global filters applied to all routes
+      default-filters:
+        # Correlation ID for distributed tracing
+        - name: AddRequestHeader
+          args:
+            name: X-Correlation-ID
+            value: "#{T(java.util.UUID).randomUUID().toString()}"
+        # Request timestamp for performance monitoring
+        - name: AddRequestHeader
+          args:
+            name: X-Request-Timestamp
+            value: "#{T(System).currentTimeMillis()}"
+        # Security headers for compliance
+        - name: AddResponseHeader
+          args:
+            name: X-Content-Type-Options
+            value: nosniff
+        - name: AddResponseHeader
+          args:
+            name: X-Frame-Options
+            value: DENY
+        - name: AddResponseHeader
+          args:
+            name: X-XSS-Protection
+            value: "1; mode=block"
+        - name: AddResponseHeader
+          args:
+            name: Strict-Transport-Security
+            value: "max-age=31536000; includeSubDomains"
+        # Remove sensitive server information
+        - name: RemoveResponseHeader
+          args:
+            name: Server
+      
+      # Global timeout configurations
+      httpclient:
+        connect-timeout: 1000
+        response-timeout: 5s
+        pool:
+          type: elastic
+          max-connections: 500
+          max-idle-time: 30s
+        # Connection pooling for optimal performance
+        wiretap: false
+        compression: true
+
+  # Security Configuration - Production OAuth2 and JWT
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          # Production JWT configuration with key rotation support
+          jwk-set-uri: http://auth-service:8081/oauth2/jwks
+          # Cache duration for JWK sets to reduce auth service load
+          cache-duration: PT5M
+          # JWT decoder configuration for enhanced security
+          jwt-decoder-timeout: PT30S
+          # Issuer validation
+          issuer-uri: http://auth-service:8081
+      client:
+        registration:
+          # Internal service-to-service communication
+          gateway-client:
+            client-id: api-gateway-prod
+            client-secret: "${GATEWAY_CLIENT_SECRET}"
+            authorization-grant-type: client_credentials
+            scope: read,write
+            provider: auth-service
+        provider:
+          auth-service:
+            token-uri: http://auth-service:8081/oauth2/token
+            jwk-set-uri: http://auth-service:8081/oauth2/jwks
+
+  # Redis Configuration - Production caching and session management
+  data:
+    redis:
+      # Production Redis cluster configuration
+      host: redis-prod.ufs.internal
+      port: 6379
+      password: "${REDIS_PASSWORD}"
+      database: 0
+      # Connection pooling for high-performance caching
+      lettuce:
+        pool:
+          max-active: 200
+          max-wait: -1ms
+          max-idle: 20
+          min-idle: 5
+        shutdown-timeout: 100ms
+      # Redis cluster configuration for high availability
+      cluster:
+        nodes:
+          - redis-prod-1.ufs.internal:6379
+          - redis-prod-2.ufs.internal:6379
+          - redis-prod-3.ufs.internal:6379
+        max-redirects: 3
+      # Timeout configurations
+      timeout: 2000ms
+      # SSL configuration for secure Redis connections
+      ssl: true
+      # Sentinel configuration for failover
+      sentinel:
+        master: redis-master
+        nodes:
+          - redis-sentinel-1.ufs.internal:26379
+          - redis-sentinel-2.ufs.internal:26379
+          - redis-sentinel-3.ufs.internal:26379
+        password: "${REDIS_SENTINEL_PASSWORD}"
+
+  # Distributed Tracing Configuration
+  zipkin:
+    base-url: http://jaeger-prod.ufs.internal:9411/
+    # Sample rate for production (10% to balance performance and observability)
+    probability: 0.1
+    # Service name for tracing
+    service:
+      name: ${spring.application.name}
+    # Zipkin sender configuration
+    sender:
+      type: web
+  
+  sleuth:
+    enabled: true
+    sampler:
+      probability: 0.1
+    zipkin:
+      base-url: http://jaeger-prod.ufs.internal:9411/
+    # Additional tracing configuration
+    trace-id128: true
+    supports-join: false
+    # Custom span tags for financial services
+    keys:
+      http:
+        headers:
+          request:
+            - x-user-id
+            - x-correlation-id
+            - x-financial-transaction-id
+          response:
+            - x-processing-time
+
+  # Apache Kafka Configuration - Production event streaming
+  kafka:
+    bootstrap-servers: kafka-prod-1.ufs.internal:9092,kafka-prod-2.ufs.internal:9092,kafka-prod-3.ufs.internal:9092
+    # Producer configuration for high-throughput financial events
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 3
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      # Compression for optimal network utilization
+      compression-type: lz4
+      # Idempotence for exactly-once semantics
+      enable-idempotence: true
+    # Consumer configuration
+    consumer:
+      group-id: api-gateway-prod
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      # Session timeout for consumer group management
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 3000
+      max-poll-records: 500
+    # Security configuration for Kafka
+    security:
+      protocol: SASL_SSL
+    sasl:
+      mechanism: PLAIN
+      jaas:
+        config: org.apache.kafka.common.security.plain.PlainLoginModule required username="${KAFKA_USERNAME}" password="${KAFKA_PASSWORD}";
+    ssl:
+      trust-store-location: /opt/kafka/ssl/kafka.client.truststore.jks
+      trust-store-password: "${KAFKA_TRUSTSTORE_PASSWORD}"
+      key-store-location: /opt/kafka/ssl/kafka.client.keystore.jks
+      key-store-password: "${KAFKA_KEYSTORE_PASSWORD}"
+
+  # Session management configuration
+  session:
+    store-type: redis
+    redis:
+      namespace: "api-gateway:session"
+      flush-mode: on_save
+    timeout: 30m
+    # Session tracking modes for security
+    tracking-modes: cookie,url
+    cookie:
+      name: UFSESSIONID
+      max-age: 1800s
+      secure: true
+      http-only: true
+      same-site: strict
+
+# Eureka Service Discovery - Production cluster configuration
+eureka:
+  client:
+    # Production Eureka server cluster for high availability
+    serviceUrl:
+      defaultZone: http://discovery-service-prod-1.ufs.internal:8761/eureka/,http://discovery-service-prod-2.ufs.internal:8761/eureka/
+    # Service registry configuration
+    fetch-registry: true
+    register-with-eureka: true
+    # Health check configuration
+    healthcheck:
+      enabled: true
+    # Registry fetch interval for production optimization
+    registry-fetch-interval-seconds: 30
+    # Initial instance info replication time
+    initial-instance-info-replication-interval-seconds: 40
+    # Instance info replication interval
+    instance-info-replication-interval-seconds: 30
+    # Service URL poll interval
+    eureka-service-url-poll-interval-seconds: 300
+    # Connection timeout
+    eureka-server-connect-timeout-seconds: 5
+    # Read timeout
+    eureka-server-read-timeout-seconds: 8
+    # Number of times to retry
+    eureka-server-total-connections: 200
+    eureka-server-total-connections-per-host: 50
+  instance:
+    # Production instance configuration
+    prefer-ip-address: true
+    # Instance lease renewal interval
+    lease-renewal-interval-in-seconds: 30
+    # Instance lease expiration duration
+    lease-expiration-duration-in-seconds: 90
+    # Instance hostname
+    hostname: ${spring.application.name}
+    # Instance ID with port for uniqueness
+    instance-id: ${spring.application.name}:${server.port}
+    # Health check URL path
+    health-check-url-path: /actuator/health
+    # Status page URL
+    status-page-url-path: /actuator/info
+    # Metadata for load balancing and monitoring
+    metadata-map:
+      zone: prod-zone-1
+      profile: production
+      version: "${BUILD_VERSION:1.0.0}"
+      startup: ${random.long}
+
+# Logging Configuration - Production audit and monitoring
+logging:
+  level:
+    # Root logging level for production
+    root: INFO
+    # Application-specific logging
+    com.ufs.apigateway: INFO
+    # Spring Security logging for audit
+    org.springframework.security: WARN
+    # Spring Cloud Gateway detailed logging
+    org.springframework.cloud.gateway: INFO
+    # HTTP client logging for debugging
+    org.springframework.web.reactive.function.client: DEBUG
+    # Eureka client logging
+    com.netflix.eureka: WARN
+    com.netflix.discovery: WARN
+    # Kafka logging
+    org.apache.kafka: WARN
+    org.springframework.kafka: INFO
+    # Redis logging
+    io.lettuce.core: WARN
+    # Circuit breaker logging
+    io.github.resilience4j: INFO
+  # Production logging pattern with correlation ID
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+  # Log file configuration
+  file:
+    name: /var/log/api-gateway/api-gateway.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+  # Logback configuration
+  config: classpath:logback-spring.xml
+
+# Resilience4j Configuration - Circuit breakers and rate limiting
+resilience4j:
+  # Circuit breaker configuration for service resilience
+  circuitbreaker:
+    instances:
+      # Default circuit breaker configuration
+      default:
+        register-health-indicator: true
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        permitted-number-of-calls-in-half-open-state: 3
+        automatic-transition-from-open-to-half-open-enabled: true
+        wait-duration-in-open-state: 30s
+        failure-rate-threshold: 50
+        event-consumer-buffer-size: 10
+        slow-call-rate-threshold: 100
+        slow-call-duration-threshold: 2000ms
+      # Service-specific circuit breakers
+      auth-service-cb:
+        sliding-window-size: 20
+        minimum-number-of-calls: 10
+        failure-rate-threshold: 40
+        wait-duration-in-open-state: 10s
+      transaction-service-cb:
+        sliding-window-size: 15
+        minimum-number-of-calls: 8
+        failure-rate-threshold: 30
+        wait-duration-in-open-state: 15s
+        slow-call-duration-threshold: 1000ms
+  
+  # Rate limiter configuration for production traffic management
+  ratelimiter:
+    instances:
+      # Global rate limiter
+      globalRateLimiter:
+        limit-for-period: 10000
+        limit-refresh-period: 1s
+        timeout-duration: 0
+        register-health-indicator: true
+        event-consumer-buffer-size: 100
+      # Service-specific rate limiters
+      authRateLimiter:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 1s
+      customerRateLimiter:
+        limit-for-period: 500
+        limit-refresh-period: 1s
+        timeout-duration: 1s
+      transactionRateLimiter:
+        limit-for-period: 1000
+        limit-refresh-period: 1s
+        timeout-duration: 500ms
+      riskRateLimiter:
+        limit-for-period: 200
+        limit-refresh-period: 1s
+        timeout-duration: 2s
+      complianceRateLimiter:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 3s
+      wellnessRateLimiter:
+        limit-for-period: 300
+        limit-refresh-period: 1s
+        timeout-duration: 1s
+      analyticsRateLimiter:
+        limit-for-period: 150
+        limit-refresh-period: 1s
+        timeout-duration: 2s
+      blockchainRateLimiter:
+        limit-for-period: 50
+        limit-refresh-period: 1s
+        timeout-duration: 5s
+      notificationRateLimiter:
+        limit-for-period: 400
+        limit-refresh-period: 1s
+        timeout-duration: 1s
+      aiRateLimiter:
+        limit-for-period: 100
+        limit-refresh-period: 1s
+        timeout-duration: 3s
+  
+  # Retry configuration
+  retry:
+    instances:
+      default:
+        max-attempts: 3
+        wait-duration: 100ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        retry-exceptions:
+          - java.io.IOException
+          - java.util.concurrent.TimeoutException
+        ignore-exceptions:
+          - java.lang.IllegalArgumentException
+  
+  # Bulkhead configuration for resource isolation
+  bulkhead:
+    instances:
+      default:
+        max-concurrent-calls: 100
+        max-wait-duration: 1000ms
+  
+  # Time limiter configuration
+  timelimiter:
+    instances:
+      default:
+        timeout-duration: 5s
+        cancel-running-future: true
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,gateway,configprops,env,loggers,heapdump,threaddump
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+        allowed-headers: "*"
+  endpoint:
+    health:
+      # Detailed health check for production monitoring
+      show-details: always
+      show-components: always
+      # Custom health indicators
+      group:
+        custom:
+          include: diskSpace,redis,db,kafka,eureka
+          show-details: always
+    # Prometheus metrics endpoint
+    prometheus:
+      enabled: true
+    # Gateway routes endpoint
+    gateway:
+      enabled: true
+    # Environment information
+    env:
+      enabled: true
+    # Loggers endpoint for runtime log level changes
+    loggers:
+      enabled: true
+  
+  # Metrics configuration
+  metrics:
+    tags:
+      # Application identification tags
+      application: ${spring.application.name}
+      environment: production
+      version: "${BUILD_VERSION:1.0.0}"
+      region: "${DEPLOYMENT_REGION:us-east-1}"
+    # Metric collection configuration
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.cloud.gateway.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+        spring.cloud.gateway.requests: 0.5,0.9,0.95,0.99
+    # Export configuration
+    export:
+      prometheus:
+        enabled: true
+        step: 1m
+        descriptions: true
+      # Additional metrics exports for comprehensive monitoring
+      datadog:
+        enabled: false
+      newrelic:
+        enabled: false
+  
+  # Health indicators configuration
+  health:
+    # Circuit breaker health indicators
+    circuitbreakers:
+      enabled: true
+    # Rate limiter health indicators
+    ratelimiters:
+      enabled: true
+    # Diskspace health check
+    diskspace:
+      enabled: true
+      threshold: 1GB
+    # Database health checks
+    db:
+      enabled: true
+    # Redis health check
+    redis:
+      enabled: true
+    # Kafka health check
+    kafka:
+      enabled: true
+  
+  # Info endpoint configuration
+  info:
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+    git:
+      mode: full
+      enabled: true
+    build:
+      enabled: true
+
+# Custom application properties for financial services compliance
+app:
+  # Financial services specific configurations
+  financial:
+    # Transaction limits for compliance
+    transaction-limits:
+      daily-limit: 100000
+      single-transaction-limit: 10000
+      monthly-limit: 500000
+    # Audit configuration
+    audit:
+      enabled: true
+      retention-days: 2555  # 7 years as per financial regulations
+      encrypt-sensitive-data: true
+    # Compliance configuration
+    compliance:
+      pci-dss-enabled: true
+      sox-compliance: true
+      gdpr-enabled: true
+      data-residency: US
+    # Security configuration
+    security:
+      jwt-expiration: 1800  # 30 minutes
+      refresh-token-expiration: 604800  # 7 days
+      max-failed-attempts: 5
+      account-lockout-duration: 1800  # 30 minutes
+      password-policy:
+        min-length: 12
+        require-uppercase: true
+        require-lowercase: true
+        require-numbers: true
+        require-special-chars: true
+    # Performance configuration
+    performance:
+      max-concurrent-requests: 10000
+      request-timeout: 30000
+      connection-timeout: 5000
+      read-timeout: 30000
+  
+  # Cache configuration
+  cache:
+    # TTL configurations for different cache types
+    ttl:
+      user-profile: 1800  # 30 minutes
+      auth-token: 300     # 5 minutes
+      reference-data: 3600 # 1 hour
+      api-response: 60    # 1 minute
+    # Cache sizes
+    max-size:
+      user-profile: 10000
+      auth-token: 50000
+      reference-data: 5000
+      api-response: 100000
+  
+  # External service configurations
+  external-services:
+    timeouts:
+      default: 5000
+      auth-service: 2000
+      transaction-service: 3000
+      risk-service: 5000
+      compliance-service: 8000
+    
+    retry:
+      max-attempts: 3
+      delay: 1000
+      backoff-multiplier: 2.0
+  
+  # Monitoring and alerting
+  monitoring:
+    alerts:
+      # Error rate threshold (percentage)
+      error-rate-threshold: 1.0
+      # Response time threshold (milliseconds)
+      response-time-threshold: 1000
+      # CPU usage threshold (percentage)
+      cpu-usage-threshold: 80.0
+      # Memory usage threshold (percentage)
+      memory-usage-threshold: 85.0
+    
+    # Business metrics
+    business-metrics:
+      track-transaction-volume: true
+      track-user-activity: true
+      track-service-dependencies: true
+      track-compliance-events: true
+
+# Environment-specific database configurations
+datasource:
+  # Connection pool optimization for production
+  hikari:
+    pool-name: "GatewayPool"
+    maximum-pool-size: 20
+    minimum-idle: 5
+    idle-timeout: 300000
+    connection-timeout: 20000
+    max-lifetime: 1200000
+    leak-detection-threshold: 60000
+    # Connection test query
+    connection-test-query: "SELECT 1"
+    validation-timeout: 5000

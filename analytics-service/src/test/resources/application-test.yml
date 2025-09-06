@@ -1,0 +1,56 @@
+# Test configuration for Analytics Service
+# This configuration overrides the main application settings to create a controlled test environment
+
+server:
+  port: 0  # Random port assignment for test isolation
+
+spring:
+  application:
+    name: analytics-service
+  
+  # In-memory H2 database configuration for test isolation
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+  
+  # JPA/Hibernate configuration for test environment
+  jpa:
+    database-platform: org.h2.Dialect
+    hibernate:
+      ddl-auto: create-drop  # Recreate schema for each test
+    show-sql: true  # Enable SQL logging for debugging
+  
+  # Embedded Kafka configuration for event-driven testing
+  kafka:
+    bootstrap-servers: ${spring.embedded.kafka.brokers}
+    consumer:
+      group-id: analytics-test-group
+      auto-offset-reset: earliest  # Start from beginning for consistent testing
+  
+  # InfluxDB test configuration
+  influx:
+    url: http://localhost:8086
+    token: test-token
+    org: test-org
+    bucket: test-bucket
+  
+  # OAuth2 JWT security configuration for testing
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          jwt-set-uri: http://localhost:8081/auth/realms/ufs/protocol/openid-connect/certs
+
+# Disable Eureka client for isolated testing
+eureka:
+  client:
+    enabled: false
+
+# Logging configuration for detailed test output
+logging:
+  level:
+    com.ufs.analytics: DEBUG  # Detailed logging for analytics service components
+    org.springframework.web: INFO  # Standard web logging
+    org.hibernate: INFO  # Hibernate logging

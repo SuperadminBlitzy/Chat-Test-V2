@@ -1,0 +1,577 @@
+# Production Configuration for Analytics Service
+# Unified Financial Services Platform - Analytics Service
+# Environment: Production
+# Version: 1.0.0
+
+# ==============================================================================
+# SERVER CONFIGURATION
+# ==============================================================================
+server:
+  port: 8085
+  shutdown: graceful
+  tomcat:
+    connection-timeout: 30s
+    keep-alive-timeout: 30s
+    max-connections: 8192
+    max-http-form-post-size: 2MB
+    max-swallow-size: 2MB
+    threads:
+      max: 200
+      min-spare: 50
+    accept-count: 100
+    processor-cache: 200
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain,application/javascript,text/css
+    min-response-size: 1024
+  error:
+    include-message: never
+    include-binding-errors: never
+    include-stacktrace: never
+    include-exception: false
+
+# ==============================================================================
+# SPRING APPLICATION CONFIGURATION
+# ==============================================================================
+spring:
+  application:
+    name: analytics-service
+  
+  profiles:
+    active: prod
+  
+  # Config Server Integration
+  config:
+    import: configserver:http://config-server:8888
+  
+  # Cloud Configuration
+  cloud:
+    discovery:
+      enabled: true
+    config:
+      retry:
+        initial-interval: 1000
+        max-attempts: 6
+        max-interval: 2000
+        multiplier: 1.1
+      request-connect-timeout: 5000
+      request-read-timeout: 60000
+      fail-fast: true
+    kubernetes:
+      discovery:
+        enabled: true
+        all-namespaces: false
+        wait-cache-ready: true
+        cache-loading-timeout-seconds: 60
+  
+  # Service Discovery - Eureka Configuration
+  eureka:
+    client:
+      service-url:
+        defaultZone: http://discovery-service:8761/eureka/
+      registry-fetch-interval-seconds: 30
+      instance-info-replication-interval-seconds: 30
+      eureka-connection-idle-timeout-seconds: 30
+      eureka-server-read-timeout-seconds: 8
+      eureka-server-connect-timeout-seconds: 5
+      eureka-service-url-poll-interval-seconds: 300
+      heartbeat-executor-thread-pool-size: 2
+      cache-refresh-executor-thread-pool-size: 2
+      health-check:
+        enabled: true
+    instance:
+      prefer-ip-address: true
+      lease-renewal-interval-in-seconds: 30
+      lease-expiration-duration-in-seconds: 90
+      health-check-url-path: /actuator/health
+      status-page-url-path: /actuator/info
+      metadata-map:
+        version: ${spring.application.version:1.0.0}
+        zone: production
+        cluster: analytics-cluster
+        management.context-path: /actuator
+
+  # ==============================================================================
+  # DATABASE CONFIGURATIONS
+  # ==============================================================================
+  
+  # InfluxDB Configuration for Time-Series Analytics Data
+  data:
+    influxdb:
+      url: http://influxdb:8086
+      database: ufs_analytics_prod
+      username: ${INFLUXDB_PROD_USER}
+      password: ${INFLUXDB_PROD_PASSWORD}
+      retention-policy: analytics_retention_policy
+      consistency-level: quorum
+      read-timeout: 30s
+      write-timeout: 30s
+      connect-timeout: 10s
+      gzip: true
+      batch-actions: 2000
+      batch-flush-duration: 1000
+      precision: ms
+      udp:
+        enabled: false
+      connection-pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 30000
+        test-on-borrow: true
+        test-while-idle: true
+        validation-query: SHOW DATABASES
+  
+  # JPA Configuration for relational data
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.springframework.boot.orm.jpa.hibernate.SpringPhysicalNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        show_sql: false
+        use_sql_comments: false
+        jdbc:
+          batch_size: 50
+          fetch_size: 100
+          batch_versioned_data: true
+        connection:
+          provider_disables_autocommit: true
+        query:
+          in_clause_parameter_padding: true
+          fail_on_pagination_over_collection_fetch: true
+          plan_cache_max_size: 2048
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+    open-in-view: false
+    show-sql: false
+  
+  # DataSource Configuration
+  datasource:
+    type: com.zaxxer.hikari.HikariDataSource
+    hikari:
+      pool-name: analytics-hikari-pool-prod
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+      maximum-pool-size: 20
+      minimum-idle: 5
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      connection-test-query: SELECT 1
+      auto-commit: false
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+
+  # ==============================================================================
+  # KAFKA CONFIGURATION
+  # ==============================================================================
+  kafka:
+    bootstrap-servers: kafka:9092
+    client-id: analytics-service-prod
+    producer:
+      acks: all
+      retries: 2147483647
+      max-in-flight-requests-per-connection: 5
+      enable-idempotence: true
+      batch-size: 32768
+      linger-ms: 100
+      buffer-memory: 67108864
+      compression-type: lz4
+      request-timeout-ms: 30000
+      delivery-timeout-ms: 300000
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        spring.json.add.type.headers: false
+        security.protocol: PLAINTEXT
+        max.request.size: 10485760
+    consumer:
+      group-id: analytics-group-prod
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      max-poll-records: 500
+      max-poll-interval-ms: 300000
+      session-timeout-ms: 30000
+      heartbeat-interval-ms: 10000
+      fetch-min-size: 1
+      fetch-max-wait: 500
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.ufs.analytics.model,com.ufs.common.events"
+        security.protocol: PLAINTEXT
+        isolation.level: read_committed
+        max.partition.fetch.bytes: 10485760
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 3
+      poll-timeout: 3000
+      type: batch
+      missing-topics-fatal: false
+    admin:
+      properties:
+        bootstrap.servers: kafka:9092
+        security.protocol: PLAINTEXT
+      client-id: analytics-admin-prod
+      close-timeout: 10s
+      operation-timeout: 30s
+
+  # ==============================================================================
+  # REDIS CONFIGURATION
+  # ==============================================================================
+  redis:
+    host: redis
+    port: 6379
+    password: ${REDIS_PROD_PASSWORD}
+    database: 2
+    timeout: 5000ms
+    connect-timeout: 10000ms
+    client-type: lettuce
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 30000
+        time-between-eviction-runs: 30000
+      shutdown-timeout: 100ms
+      cluster:
+        refresh:
+          adaptive: true
+          period: 30s
+    jedis:
+      pool:
+        enabled: false
+
+  # ==============================================================================
+  # SECURITY CONFIGURATION
+  # ==============================================================================
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: http://auth-service:9000/oauth2/token
+          jwk-set-uri: http://auth-service:9000/oauth2/jwks
+          jws-algorithms: RS256,HS256
+          cache-duration: PT15M
+          clock-skew: PT60S
+    require-ssl: true
+  
+  # ==============================================================================
+  # CACHE CONFIGURATION
+  # ==============================================================================
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: analytics-service-prod
+    cache-names:
+      - customerAnalytics
+      - transactionMetrics
+      - riskScores
+      - complianceReports
+      - modelPredictions
+
+  # ==============================================================================
+  # JACKSON CONFIGURATION
+  # ==============================================================================
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      write-date-keys-as-timestamps: false
+      fail-on-empty-beans: false
+    deserialization:
+      fail-on-unknown-properties: false
+      fail-on-null-for-primitives: false
+      accept-empty-string-as-null-object: true
+    default-property-inclusion: non_null
+    time-zone: UTC
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+
+# ==============================================================================
+# LOGGING CONFIGURATION
+# ==============================================================================
+logging:
+  level:
+    com.ufs.analytics: INFO
+    org.springframework.kafka: WARN
+    org.apache.kafka: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type.descriptor.sql.BasicBinder: WARN
+    org.springframework.security: WARN
+    org.springframework.cloud: INFO
+    io.micrometer: INFO
+    root: WARN
+  pattern:
+    console: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n'
+  file:
+    name: /var/log/analytics-service/analytics-service.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB
+
+# ==============================================================================
+# ACTUATOR & MONITORING CONFIGURATION
+# ==============================================================================
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics,env,configprops
+      base-path: /actuator
+      path-mapping:
+        prometheus: metrics-prometheus
+    enabled-by-default: false
+  endpoint:
+    health:
+      enabled: true
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+      group:
+        readiness:
+          include: readinessState,kafka,redis,influxdb,db
+        liveness:
+          include: livenessState,diskSpace,ping
+    info:
+      enabled: true
+    prometheus:
+      enabled: true
+    metrics:
+      enabled: true
+    env:
+      enabled: true
+      show-values: never
+    configprops:
+      enabled: true
+      show-values: never
+  
+  health:
+    kafka:
+      enabled: true
+    redis:
+      enabled: true
+    influxdb:
+      enabled: true
+    db:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 1GB
+    ping:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+  
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: production
+      version: ${spring.application.version:1.0.0}
+      cluster: analytics-cluster
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        kafka.consumer.fetch.latency: true
+        influxdb.query.duration: true
+      percentiles:
+        http.server.requests: 0.5, 0.75, 0.9, 0.95, 0.99
+        kafka.consumer.fetch.latency: 0.5, 0.75, 0.9, 0.95, 0.99
+        influxdb.query.duration: 0.5, 0.75, 0.9, 0.95, 0.99
+      sla:
+        http.server.requests: 50ms, 100ms, 500ms, 1s, 5s
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+        histogram-flavor: prometheus
+      influx:
+        enabled: true
+        db: metrics_prod
+        uri: http://influxdb:8086
+        step: 15s
+        batch-size: 10000
+        compressed: true
+        consistency: one
+        connect-timeout: 10s
+        read-timeout: 30s
+        auto-create-db: false
+    enable:
+      kafka: true
+      jvm: true
+      process: true
+      system: true
+      tomcat: true
+      hikaricp: true
+      redis: true
+      http: true
+      logback: true
+  
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    java:
+      enabled: true
+    os:
+      enabled: true
+  
+  server:
+    port: 8085
+    ssl:
+      enabled: false
+  
+  tracing:
+    sampling:
+      probability: 0.1
+    zipkin:
+      tracing:
+        endpoint: http://zipkin:9411/api/v2/spans
+
+# ==============================================================================
+# ANALYTICS SERVICE SPECIFIC CONFIGURATION
+# ==============================================================================
+analytics:
+  processing:
+    batch-size: 1000
+    parallel-threads: 8
+    timeout: 300s
+    retry:
+      max-attempts: 3
+      backoff-delay: 1s
+      max-delay: 10s
+  
+  risk-assessment:
+    model:
+      refresh-interval: 3600s
+      cache-size: 10000
+      prediction-timeout: 500ms
+    thresholds:
+      high-risk: 0.8
+      medium-risk: 0.5
+      low-risk: 0.2
+  
+  compliance:
+    reporting:
+      schedule: "0 0 2 * * ?" # Daily at 2 AM
+      retention-days: 2555 # 7 years
+      batch-size: 5000
+    monitoring:
+      alert-threshold: 0.95
+      check-interval: 300s
+  
+  real-time:
+    window-size: 60s
+    watermark-delay: 5s
+    parallelism: 4
+    checkpoint-interval: 10s
+  
+  data-retention:
+    raw-data: 90d
+    aggregated-data: 7y
+    audit-logs: 7y
+    metrics: 1y
+
+# ==============================================================================
+# PERFORMANCE TUNING
+# ==============================================================================
+performance:
+  connection-pools:
+    core-pool-size: 10
+    max-pool-size: 50
+    queue-capacity: 100
+    keep-alive-seconds: 60
+    thread-name-prefix: analytics-async-
+  
+  timeouts:
+    http-client: 30s
+    database-query: 30s
+    kafka-producer: 30s
+    kafka-consumer: 30s
+    cache-operations: 5s
+  
+  memory:
+    heap-dump-on-oom: true
+    heap-dump-path: /tmp/analytics-service-heapdump.hprof
+  
+  gc:
+    log-enabled: true
+    log-file: /var/log/analytics-service/gc.log
+
+# ==============================================================================
+# FEATURE FLAGS
+# ==============================================================================
+features:
+  ai-risk-assessment: true
+  real-time-processing: true
+  advanced-analytics: true
+  compliance-automation: true
+  predictive-modeling: true
+  fraud-detection: true
+  customer-insights: true
+  regulatory-reporting: true
+
+# ==============================================================================
+# EXTERNAL SERVICE ENDPOINTS
+# ==============================================================================
+external-services:
+  config-server:
+    url: http://config-server:8888
+    timeout: 30s
+  discovery-service:
+    url: http://discovery-service:8761
+    timeout: 10s
+  auth-service:
+    url: http://auth-service:9000
+    timeout: 30s
+  notification-service:
+    url: http://notification-service:8087
+    timeout: 15s
+  risk-service:
+    url: http://risk-service:8084
+    timeout: 30s
+
+# ==============================================================================
+# ENVIRONMENT VARIABLES
+# ==============================================================================
+# The following environment variables are required:
+# - INFLUXDB_PROD_USER: InfluxDB production username
+# - INFLUXDB_PROD_PASSWORD: InfluxDB production password  
+# - REDIS_PROD_PASSWORD: Redis production password
+# - SPRING_PROFILES_ACTIVE: Should be set to 'prod'
+# - JVM_OPTS: JVM tuning parameters for production
+# - LOG_LEVEL: Application log level (default: INFO)

@@ -1,0 +1,596 @@
+# ==================================================================================
+# UNIFIED FINANCIAL SERVICES PLATFORM - ANALYTICS SERVICE CONFIGURATION
+# ==================================================================================
+# This configuration file contains enterprise-grade settings for the analytics
+# service, including predictive analytics capabilities, real-time data processing,
+# and comprehensive monitoring for financial services compliance.
+# 
+# Version: 1.0.0
+# Service: analytics-service
+# Technology Stack: Spring Boot 3.2+, Java 21 LTS
+# ==================================================================================
+
+# ==================================================================================
+# SERVER CONFIGURATION
+# ==================================================================================
+server:
+  # Primary service port for analytics service
+  port: 8086
+  
+  # Servlet configuration for enterprise deployment
+  servlet:
+    context-path: /analytics
+    application-display-name: "UFS Analytics Service"
+    
+  # HTTP/2 support for improved performance
+  http2:
+    enabled: true
+    
+  # SSL/TLS configuration for production security
+  ssl:
+    enabled: false  # Handled by service mesh in production
+    
+  # Error handling configuration
+  error:
+    include-stacktrace: never
+    include-exception: false
+    include-message: always
+    include-binding-errors: never
+    
+  # Connection timeout and threading configuration
+  tomcat:
+    connection-timeout: 20000
+    max-connections: 8192
+    threads:
+      max: 200
+      min-spare: 10
+    accept-count: 100
+    max-http-form-post-size: 2MB
+
+# ==================================================================================
+# SPRING FRAMEWORK CONFIGURATION
+# ==================================================================================
+spring:
+  # Application identity and metadata
+  application:
+    name: analytics-service
+    version: "@project.version@"
+    
+  # Configuration server integration for centralized config management
+  config:
+    import: "optional:configserver:http://config-server:8088"
+    
+  # Service discovery and registration with Eureka
+  cloud:
+    discovery:
+      enabled: true
+      
+    # Circuit breaker configuration for resilience
+    circuitbreaker:
+      resilience4j:
+        enabled: true
+        
+    # Load balancer configuration
+    loadbalancer:
+      cache:
+        enabled: true
+        ttl: 35s
+        capacity: 256
+
+  # ==================================================================================
+  # DATABASE CONFIGURATIONS
+  # ==================================================================================
+  
+  # InfluxDB configuration for time-series analytics data
+  data:
+    influxdb:
+      url: http://influxdb:8086
+      username: admin
+      password: ${INFLUXDB_PASSWORD:password}
+      database: ufs_analytics
+      retention-policy: autogen
+      connect-timeout: 10s
+      read-timeout: 30s
+      write-timeout: 10s
+      # Connection pool settings for high-performance time-series operations
+      connection-pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: 10000
+        
+  # MongoDB configuration for document-based analytics storage
+  data:
+    mongodb:
+      uri: mongodb://mongodb-cluster:27017/ufs_analytics
+      username: ${MONGODB_USERNAME:analytics_user}
+      password: ${MONGODB_PASSWORD:password}
+      authentication-database: admin
+      # Connection pool configuration based on tech specs
+      connection-pool:
+        max-pool-size: 100
+        min-pool-size: 10
+        max-idle-time: 300000
+        wait-queue-timeout: 10000
+        server-selection-timeout: 30000
+        
+  # PostgreSQL configuration for transactional analytics metadata
+  datasource:
+    url: jdbc:postgresql://postgres-primary:5432/ufs_analytics
+    username: ${POSTGRES_USERNAME:analytics_user}
+    password: ${POSTGRES_PASSWORD:password}
+    driver-class-name: org.postgresql.Driver
+    # HikariCP connection pool configuration for enterprise performance
+    hikari:
+      pool-name: AnalyticsHikariPool
+      maximum-pool-size: 20
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1800000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      leak-detection-threshold: 60000
+      
+  # JPA and Hibernate configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: false
+        show_sql: false
+        # Performance optimizations
+        jdbc:
+          batch_size: 25
+          order_inserts: true
+          order_updates: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+            
+  # Redis configuration for caching and session management
+  data:
+    redis:
+      host: redis-cluster
+      port: 6379
+      password: ${REDIS_PASSWORD:password}
+      database: 2  # Dedicated database for analytics service
+      timeout: 5000
+      # Connection pool configuration based on tech specs
+      lettuce:
+        pool:
+          max-active: 50
+          max-idle: 20
+          min-idle: 5
+          max-wait: 10000
+        shutdown-timeout: 200ms
+
+  # ==================================================================================
+  # KAFKA CONFIGURATION FOR REAL-TIME DATA PROCESSING
+  # ==================================================================================
+  kafka:
+    # Bootstrap servers for Kafka cluster connection
+    bootstrap-servers: kafka-cluster:9092
+    
+    # Consumer configuration for analytics data ingestion
+    consumer:
+      group-id: analytics-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      auto-commit-interval: 1000
+      session-timeout: 30000
+      heartbeat-interval: 3000
+      max-poll-records: 500
+      max-poll-interval: 300000
+      fetch-min-size: 1
+      fetch-max-wait: 500
+      # Serialization configuration
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      # Security and reliability properties
+      properties:
+        spring.json.trusted.packages: "com.ufs.analytics.event,com.ufs.common.events"
+        spring.json.type.mapping: "transactionEvent:com.ufs.analytics.event.TransactionEvent,riskEvent:com.ufs.analytics.event.RiskEvent"
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username='${KAFKA_USERNAME:analytics}' password='${KAFKA_PASSWORD:password}';"
+        ssl.truststore.location: /opt/certs/kafka.truststore.jks
+        ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD:truststore-password}
+        
+    # Producer configuration for analytics results publishing
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      acks: all
+      retries: 2147483647
+      batch-size: 16384
+      linger-ms: 5
+      buffer-memory: 33554432
+      max-request-size: 1048576
+      # Idempotence for exactly-once semantics
+      enable-idempotence: true
+      properties:
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: "org.apache.kafka.common.security.scram.ScramLoginModule required username='${KAFKA_USERNAME:analytics}' password='${KAFKA_PASSWORD:password}';"
+        
+    # Kafka Streams configuration for real-time analytics processing
+    streams:
+      application-id: analytics-stream-processor
+      bootstrap-servers: kafka-cluster:9092
+      default-key-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      default-value-serde: org.springframework.kafka.support.serializer.JsonSerde
+      state-dir: /tmp/kafka-streams
+      replication-factor: 3
+      properties:
+        processing.guarantee: exactly_once_v2
+        cache.max.bytes.buffering: 10485760
+        commit.interval.ms: 100
+
+  # ==================================================================================
+  # SECURITY CONFIGURATION
+  # ==================================================================================
+  security:
+    # OAuth2 Resource Server configuration for JWT validation
+    oauth2:
+      resourceserver:
+        jwt:
+          # JWT issuer URI for token validation
+          issuer-uri: http://auth-service:9000
+          # JWK Set URI for public key retrieval
+          jwk-set-uri: http://auth-service:9000/.well-known/jwks.json
+          # JWT validation settings
+          audiences: analytics-service,ufs-platform
+          
+        # Additional security configurations
+        opaque-token:
+          introspection-uri: http://auth-service:9000/oauth/introspect
+          client-id: analytics-service
+          client-secret: ${OAUTH_CLIENT_SECRET:analytics-secret}
+
+  # ==================================================================================
+  # CACHING CONFIGURATION
+  # ==================================================================================
+  cache:
+    type: redis
+    redis:
+      time-to-live: 600000  # 10 minutes default TTL
+      cache-null-values: false
+      use-key-prefix: true
+      key-prefix: "analytics:"
+    cache-names:
+      - "customerProfiles"
+      - "riskAssessments"
+      - "analyticsResults"
+      - "complianceData"
+
+# ==================================================================================
+# EUREKA SERVICE DISCOVERY CONFIGURATION
+# ==================================================================================
+eureka:
+  client:
+    # Registry configuration for service discovery
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    # Client behavior settings
+    enabled: true
+    fetch-registry: true
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 30
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-read-timeout-seconds: 8
+    
+  instance:
+    # Instance configuration for optimal service mesh integration
+    prefer-ip-address: true
+    ip-address: ${HOST_IP:127.0.0.1}
+    non-secure-port: ${server.port}
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    # Health check configuration
+    health-check-url-path: /analytics/actuator/health
+    status-page-url-path: /analytics/actuator/info
+    # Metadata for service mesh and monitoring
+    metadata-map:
+      version: "@project.version@"
+      service-type: "analytics"
+      business-capability: "predictive-analytics"
+      compliance-level: "financial-services"
+
+# ==================================================================================
+# ACTUATOR ENDPOINTS FOR MONITORING AND MANAGEMENT
+# ==================================================================================
+management:
+  # Endpoint configuration for comprehensive observability
+  endpoints:
+    web:
+      exposure:
+        # Expose all endpoints for enterprise monitoring
+        include: "*"
+      base-path: /actuator
+      path-mapping:
+        prometheus: metrics
+        
+  # Endpoint-specific configurations
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      # Custom health indicators
+      group:
+        readiness:
+          include: "readinessState,db,redis,kafka"
+        liveness:
+          include: "livenessState,diskSpace"
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    loggers:
+      enabled: true
+    env:
+      enabled: true
+      show-values: when-authorized
+      
+  # Metrics configuration for Prometheus integration
+  metrics:
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.kafka.consumer: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99
+        spring.kafka.consumer: 0.5, 0.95, 0.99
+    tags:
+      application: ${spring.application.name}
+      service-type: analytics
+      environment: ${ENVIRONMENT:development}
+      
+  # Health indicators configuration
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+    kafka:
+      enabled: true
+    redis:
+      enabled: true
+    influxdb:
+      enabled: true
+    db:
+      enabled: true
+
+# ==================================================================================
+# LOGGING CONFIGURATION
+# ==================================================================================
+logging:
+  # Log levels for different components and packages
+  level:
+    # Application-specific logging
+    com.ufs.analytics: INFO
+    com.ufs.common: INFO
+    
+    # Spring Framework logging
+    org.springframework.web: INFO
+    org.springframework.security: INFO
+    org.springframework.kafka: INFO
+    org.springframework.data: INFO
+    org.springframework.cache: INFO
+    
+    # Database and persistence logging
+    org.hibernate: WARN
+    org.hibernate.SQL: WARN
+    org.hibernate.type: WARN
+    
+    # Infrastructure logging
+    org.apache.kafka: INFO
+    io.lettuce: INFO
+    com.zaxxer.hikari: INFO
+    
+    # Monitoring and metrics
+    io.micrometer: INFO
+    
+    # Circuit breaker logging
+    io.github.resilience4j: INFO
+    
+    # Root logger level
+    root: INFO
+    
+  # Logging pattern for structured logging
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    
+  # File logging configuration for audit and compliance
+  file:
+    name: /var/log/analytics-service/analytics-service.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+
+# ==================================================================================
+# ANALYTICS SERVICE SPECIFIC CONFIGURATION
+# ==================================================================================
+analytics:
+  # Predictive analytics configuration
+  prediction:
+    # Model refresh intervals
+    model-refresh-interval: 3600000  # 1 hour in milliseconds
+    batch-size: 1000
+    # Feature store configuration
+    feature-store:
+      enabled: true
+      cache-duration: 1800  # 30 minutes
+      
+  # Real-time processing configuration
+  realtime:
+    # Stream processing configuration
+    window-size: 300  # 5 minutes
+    watermark-delay: 60000  # 1 minute
+    parallelism: 4
+    
+  # Risk assessment configuration
+  risk:
+    # Risk scoring thresholds
+    low-risk-threshold: 300
+    medium-risk-threshold: 600
+    high-risk-threshold: 800
+    # Assessment cache configuration
+    cache-duration: 900  # 15 minutes
+    
+  # Compliance and audit configuration
+  compliance:
+    # Audit logging
+    audit-enabled: true
+    audit-retention-days: 2555  # 7 years for financial services
+    # Data retention policies
+    transaction-data-retention-days: 2555
+    customer-data-retention-days: 3650  # 10 years
+    
+  # Performance and optimization settings
+  performance:
+    # Async processing configuration
+    thread-pool-size: 20
+    max-queue-size: 1000
+    # Caching strategy
+    cache-strategy: "aggressive"
+    # Connection pool optimization
+    connection-pool-optimization: true
+
+# ==================================================================================
+# RESILIENCE4J CONFIGURATION FOR CIRCUIT BREAKERS
+# ==================================================================================
+resilience4j:
+  # Circuit breaker configuration
+  circuitbreaker:
+    instances:
+      influxdb-service:
+        sliding-window-size: 10
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 30s
+        permitted-number-of-calls-in-half-open-state: 3
+        minimum-number-of-calls: 5
+        
+      external-api:
+        sliding-window-size: 20
+        failure-rate-threshold: 60
+        wait-duration-in-open-state: 60s
+        permitted-number-of-calls-in-half-open-state: 5
+        minimum-number-of-calls: 10
+        
+  # Retry configuration
+  retry:
+    instances:
+      database-operations:
+        max-attempts: 3
+        wait-duration: 1000ms
+        retry-exceptions:
+          - java.sql.SQLException
+          - org.springframework.dao.DataAccessException
+          
+  # Rate limiter configuration
+  ratelimiter:
+    instances:
+      analytics-api:
+        limit-for-period: 1000
+        limit-refresh-period: 60s
+        timeout-duration: 5s
+
+# ==================================================================================
+# CUSTOM APPLICATION PROPERTIES
+# ==================================================================================
+# Version information
+info:
+  app:
+    name: ${spring.application.name}
+    description: "Unified Financial Services Platform - Analytics Service"
+    version: "@project.version@"
+    encoding: "@project.build.sourceEncoding@"
+    java:
+      version: "@java.version@"
+  build:
+    timestamp: "@maven.build.timestamp@"
+    
+# Feature flags for gradual rollout
+features:
+  # AI/ML features
+  machine-learning-enabled: true
+  real-time-fraud-detection: true
+  predictive-analytics: true
+  
+  # Integration features
+  blockchain-integration: false
+  external-market-data: true
+  
+  # Compliance features
+  enhanced-audit-logging: true
+  gdpr-compliance: true
+  sox-compliance: true
+
+# Environment-specific overrides (managed by config server)
+---
+# Development environment profile
+spring:
+  config:
+    activate:
+      on-profile: development
+      
+# Relaxed security for development
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: http://localhost:9000
+
+# Development database connections
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_analytics_dev
+  data:
+    influxdb:
+      url: http://localhost:8086
+    redis:
+      host: localhost
+
+logging:
+  level:
+    com.ufs.analytics: DEBUG
+    org.hibernate.SQL: DEBUG
+
+---
+# Production environment profile
+spring:
+  config:
+    activate:
+      on-profile: production
+
+# Production-grade security settings
+security:
+  require-ssl: true
+  oauth2:
+    resourceserver:
+      jwt:
+        cache-duration: 300s
+
+# Production monitoring enhancements
+management:
+  endpoint:
+    env:
+      show-values: never
+    configprops:
+      show-values: never
+
+# Strict logging for production
+logging:
+  level:
+    com.ufs.analytics: INFO
+    root: WARN

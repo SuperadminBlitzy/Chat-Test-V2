@@ -1,0 +1,513 @@
+# =============================================================================
+# Analytics Service - Development Environment Configuration
+# =============================================================================
+# This configuration file provides development-specific settings for the
+# Analytics Service, supporting F-005 (Predictive Analytics Dashboard) and
+# F-008 (Real-time Transaction Monitoring) features.
+#
+# Key Features Supported:
+# - Real-time transaction monitoring with <500ms response times
+# - Predictive analytics with AI/ML model integration
+# - Multi-database connectivity (PostgreSQL, MongoDB, InfluxDB)
+# - Event-driven architecture with Kafka messaging
+# - Comprehensive monitoring and observability
+# =============================================================================
+
+# Spring Framework Configuration
+spring:
+  # Active profile for development environment
+  profiles:
+    active: dev
+  
+  # Application metadata
+  application:
+    name: analytics-service
+    version: 1.0.0-SNAPSHOT
+  
+  # =========================================================================
+  # Database Configuration
+  # =========================================================================
+  
+  # PostgreSQL Configuration - Primary transactional database
+  # Used for structured analytics data, customer profiles, and audit logs
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_analytics_dev
+    username: devuser
+    password: devpass
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration
+    # Optimized for financial services high-throughput requirements
+    hikari:
+      # Connection pool sizing based on analytics workload patterns
+      minimum-idle: 10                    # Minimum connections for baseline load
+      maximum-pool-size: 20               # Maximum connections for peak analytics processing
+      max-lifetime: 1800000               # 30 minutes - connection max lifetime
+      connection-timeout: 30000           # 30 seconds - connection acquisition timeout
+      idle-timeout: 600000                # 10 minutes - idle connection timeout
+      leak-detection-threshold: 60000     # 60 seconds - connection leak detection
+      
+      # Performance optimization for analytics queries
+      data-source-properties:
+        cachePrepStmts: true
+        prepStmtCacheSize: 250
+        prepStmtCacheSqlLimit: 2048
+        useServerPrepStmts: true
+        useLocalSessionState: true
+        rewriteBatchedStatements: true
+        cacheResultSetMetadata: true
+        cacheServerConfiguration: true
+        elideSetAutoCommits: true
+        maintainTimeStats: false
+  
+  # JPA/Hibernate Configuration
+  # Optimized for analytics and reporting workloads
+  jpa:
+    hibernate:
+      ddl-auto: update                    # Auto-update schema for development
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.hibernate.boot.model.naming.ImplicitNamingStrategyLegacyJpaImpl
+    
+    properties:
+      hibernate:
+        # Dialect for PostgreSQL optimization
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        
+        # Performance tuning for analytics queries
+        jdbc:
+          batch_size: 50                  # Batch processing for analytics data ingestion
+          fetch_size: 100                 # Optimized fetch size for large result sets
+        
+        # Query optimization
+        order_inserts: true
+        order_updates: true
+        batch_versioned_data: true
+        
+        # Development debugging
+        show_sql: true
+        format_sql: true
+        use_sql_comments: true
+        
+        # Connection handling
+        connection:
+          provider_disables_autocommit: true
+        
+        # Cache configuration for analytics data
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+  
+  # =========================================================================
+  # MongoDB Configuration
+  # =========================================================================
+  
+  # MongoDB Configuration - Document storage for analytics data
+  # Used for customer interactions, unstructured analytics data, and real-time metrics
+  data:
+    mongodb:
+      uri: mongodb://localhost:27017/ufs_analytics_dev
+      
+      # Connection pool configuration aligned with tech specs
+      # Reference: MongoDB Connection Pool Configuration section
+      connection-pool:
+        max-pool-size: 100                # Maximum connections for analytics workload
+        min-pool-size: 10                 # Minimum connections maintained
+        max-idle-time: 300000             # 5 minutes - idle connection timeout
+        wait-queue-timeout: 10000         # 10 seconds - wait timeout for connection
+        server-selection-timeout: 30000   # 30 seconds - server selection timeout
+        
+      # MongoDB-specific analytics optimizations
+      database: ufs_analytics_dev
+      repositories:
+        enabled: true
+      
+      # GridFS configuration for large analytics files
+      gridfs:
+        database: ufs_analytics_dev
+        bucket: analytics-files
+
+# =========================================================================
+# Message Queue Configuration - Apache Kafka
+# =========================================================================
+
+# Kafka Configuration for real-time event streaming
+# Supports F-008 (Real-time Transaction Monitoring) requirements
+kafka:
+  bootstrap-servers: localhost:9092
+  
+  # Consumer configuration for real-time analytics
+  consumer:
+    group-id: analytics-service-dev
+    auto-offset-reset: earliest
+    enable-auto-commit: true
+    auto-commit-interval: 5000
+    key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+    
+    # Analytics-specific consumer properties
+    properties:
+      spring.json.trusted.packages: "com.ufs.analytics.model,com.ufs.common.events"
+      fetch.min.bytes: 1024
+      fetch.max.wait.ms: 500              # Low latency for real-time processing
+      max.poll.records: 100               # Batch size for analytics processing
+      session.timeout.ms: 30000
+      heartbeat.interval.ms: 10000
+  
+  # Producer configuration for analytics events
+  producer:
+    key-serializer: org.apache.kafka.common.serialization.StringSerializer
+    value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+    acks: 1                               # Performance optimized for dev environment
+    retries: 3
+    batch-size: 16384
+    linger-ms: 5                          # Low latency for real-time analytics
+    buffer-memory: 33554432
+    
+    # Analytics event publishing properties
+    properties:
+      compression.type: snappy            # Optimized compression for analytics data
+      max.in.flight.requests.per.connection: 5
+
+# =========================================================================
+# Time-Series Database Configuration - InfluxDB
+# =========================================================================
+
+# InfluxDB Configuration for financial metrics and time-series analytics
+# Critical for F-005 (Predictive Analytics Dashboard) real-time visualization
+influx:
+  url: http://localhost:8086
+  token: dev-token
+  org: ufs-dev
+  bucket: analytics-bucket-dev
+  
+  # Connection configuration for analytics workload
+  connection:
+    timeout: 10000                        # 10 seconds connection timeout
+    read-timeout: 30000                   # 30 seconds read timeout for analytics queries
+    write-timeout: 10000                  # 10 seconds write timeout for metrics ingestion
+  
+  # Batch processing for high-throughput analytics metrics
+  batch:
+    actions: 1000                         # Batch size for metric writes
+    flush-interval: 1000                  # 1 second flush interval for real-time metrics
+    jitter-interval: 0
+    retry-interval: 5000
+
+# =========================================================================
+# Security Configuration
+# =========================================================================
+
+# OAuth2 Resource Server Configuration
+# Integrates with platform-wide security architecture
+security:
+  oauth2:
+    resourceserver:
+      jwt:
+        jwk-set-uri: http://localhost:8080/oauth2/jwks
+        cache-duration: PT5M               # 5 minutes JWT cache for development
+        
+        # JWT validation configuration
+        issuer-uri: http://localhost:8080
+        
+    # Analytics service specific security claims
+    claims:
+      analytics-read: "analytics:read"
+      analytics-write: "analytics:write"
+      analytics-admin: "analytics:admin"
+
+# CORS configuration for development frontend integration
+cors:
+  allowed-origins: 
+    - http://localhost:3000               # React development server
+    - http://localhost:4200               # Angular development server
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  allowed-headers: "*"
+  allow-credentials: true
+  max-age: 3600
+
+# =========================================================================
+# Service Discovery Configuration
+# =========================================================================
+
+# Eureka Client Configuration
+# Enables service discovery in microservices architecture
+eureka:
+  client:
+    service-url:
+      defaultZone: http://localhost:8761/eureka/
+    
+    # Development-specific Eureka settings
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    
+  instance:
+    hostname: localhost
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    
+    # Health check configuration
+    health-check-url-path: /actuator/health
+    status-page-url-path: /actuator/info
+    
+    # Service metadata
+    metadata-map:
+      version: 1.0.0-SNAPSHOT
+      environment: development
+      service-type: analytics
+      features: "predictive-analytics,real-time-monitoring"
+
+# =========================================================================
+# Server Configuration
+# =========================================================================
+
+server:
+  port: 8086                              # Service port (aligned with InfluxDB convention)
+  
+  # Servlet configuration optimized for analytics API endpoints
+  servlet:
+    context-path: /analytics
+    session:
+      timeout: PT30M                      # 30 minutes session timeout
+      cookie:
+        http-only: true
+        secure: false                     # Disabled for development HTTP
+        same-site: lax
+  
+  # Compression for analytics data responses
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+  
+  # Error handling configuration
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+
+# =========================================================================
+# Logging Configuration
+# =========================================================================
+
+# Comprehensive logging for development debugging and monitoring
+logging:
+  level:
+    # Analytics service specific logging
+    com.ufs.analytics: DEBUG              # Detailed logging for analytics components
+    
+    # Spring framework logging
+    org.springframework: INFO
+    org.springframework.data: DEBUG       # Database query logging
+    org.springframework.kafka: DEBUG      # Kafka integration logging
+    org.springframework.security: DEBUG   # Security debugging
+    
+    # Database and connection logging
+    org.hibernate: INFO
+    org.hibernate.SQL: DEBUG             # SQL query logging
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE  # Parameter binding
+    com.zaxxer.hikari: DEBUG              # Connection pool logging
+    
+    # MongoDB logging
+    org.springframework.data.mongodb: DEBUG
+    org.mongodb.driver: INFO
+    
+    # Kafka logging
+    org.apache.kafka: INFO
+    
+    # InfluxDB logging
+    com.influxdb: DEBUG
+    
+    # Root logger level
+    root: INFO
+  
+  # Log file configuration for development
+  file:
+    name: logs/analytics-service-dev.log
+    max-size: 100MB
+    max-history: 7
+    total-size-cap: 1GB
+  
+  # Log pattern configuration
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%logger{36}] [%X{traceId:-},%X{spanId:-}] - %msg%n"
+
+# =========================================================================
+# Monitoring and Observability Configuration
+# =========================================================================
+
+# Spring Boot Actuator - Management endpoints
+# Enables comprehensive monitoring for analytics service
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"                      # Expose all endpoints for development
+      base-path: /actuator
+      cors:
+        allowed-origins: "*"
+        allowed-methods: GET,POST
+  
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true                     # Kubernetes probes support
+    
+    metrics:
+      enabled: true
+    
+    prometheus:
+      enabled: true                       # Prometheus metrics endpoint
+    
+    info:
+      enabled: true
+    
+    env:
+      enabled: true
+      show-values: always                 # Show configuration values in dev
+    
+    loggers:
+      enabled: true                       # Dynamic log level changes
+    
+    threaddump:
+      enabled: true
+    
+    heapdump:
+      enabled: true
+  
+  # Metrics configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: PT15S                       # 15 seconds metric collection interval
+        descriptions: true
+    
+    # Custom metrics for analytics service
+    tags:
+      application: analytics-service
+      environment: development
+      version: 1.0.0-SNAPSHOT
+    
+    # JVM metrics
+    enable:
+      jvm: true
+      process: true
+      system: true
+      http: true
+      jdbc: true
+      hikaricp: true                      # Connection pool metrics
+      
+  # Health indicators
+  health:
+    defaults:
+      enabled: true
+    db:
+      enabled: true
+    mongo:
+      enabled: true
+    kafka:
+      enabled: true
+    diskspace:
+      enabled: true
+      threshold: 1GB
+  
+  # Application info
+  info:
+    env:
+      enabled: true
+    git:
+      mode: full
+    build:
+      enabled: true
+    java:
+      enabled: true
+
+# =========================================================================
+# Analytics Service Specific Configuration
+# =========================================================================
+
+# Custom analytics configuration
+analytics:
+  # Predictive analytics configuration (F-005)
+  predictive:
+    model:
+      refresh-interval: PT1H              # Hourly model refresh for development
+      batch-size: 1000                    # Batch size for model training data
+      confidence-threshold: 0.85          # Confidence threshold for predictions
+    
+    cache:
+      ttl: PT30M                          # 30 minutes cache TTL for predictions
+      max-size: 10000                     # Maximum cached predictions
+  
+  # Real-time monitoring configuration (F-008)
+  realtime:
+    window-size: PT5M                     # 5 minutes analysis window
+    alert-threshold: 1000                 # Alert threshold for transaction volume
+    processing-delay: PT1S                # 1 second maximum processing delay
+    
+    # Metrics collection intervals
+    metrics:
+      collection-interval: PT15S          # 15 seconds metrics collection
+      aggregation-window: PT1M            # 1 minute aggregation window
+  
+  # Data retention policies
+  retention:
+    raw-data: P30D                        # 30 days raw analytics data
+    aggregated-data: P1Y                  # 1 year aggregated data
+    audit-logs: P7Y                       # 7 years audit log retention
+  
+  # Integration timeouts
+  timeouts:
+    database-query: PT30S                 # 30 seconds database query timeout
+    external-api: PT10S                   # 10 seconds external API timeout
+    cache-operation: PT5S                 # 5 seconds cache operation timeout
+
+# =========================================================================
+# Development Tools Configuration
+# =========================================================================
+
+# DevTools configuration for hot reloading
+spring.devtools:
+  restart:
+    enabled: true
+    exclude: logs/**,target/**
+  livereload:
+    enabled: true
+    port: 35729
+  
+# Development-specific feature flags
+features:
+  enable-debug-endpoints: true
+  enable-test-data-generation: true
+  enable-performance-logging: true
+  enable-detailed-error-responses: true
+  
+# API Documentation configuration
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+  
+  # OpenAPI configuration
+  info:
+    title: Analytics Service API
+    description: Financial Analytics and Real-time Monitoring Service
+    version: 1.0.0-SNAPSHOT
+    contact:
+      name: Analytics Team
+      email: analytics-team@ufs.com

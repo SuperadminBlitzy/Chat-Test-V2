@@ -1,0 +1,543 @@
+# Spring Boot Application Configuration
+spring:
+  application:
+    name: api-gateway
+  
+  # Centralized Configuration Management
+  config:
+    import: optional:configserver:http://config-server:8888
+  
+  # Spring Cloud Gateway Configuration
+  cloud:
+    gateway:
+      # Service Discovery Integration
+      discovery:
+        locator:
+          enabled: true
+          lower-case-service-id: true
+      
+      # Global Gateway Configuration
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: "*"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: false
+            maxAge: 3600
+      
+      # Default Filters for All Routes
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - name: CircuitBreaker
+          args:
+            name: defaultCircuitBreaker
+            fallbackUri: forward:/fallback
+        - name: Retry
+          args:
+            retries: 3
+            methods: GET,POST,PUT,DELETE
+            backoff:
+              firstBackoff: 100ms
+              maxBackoff: 500ms
+              factor: 2
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 100
+            redis-rate-limiter.burstCapacity: 200
+            redis-rate-limiter.requestedTokens: 1
+      
+      # Service Routes Configuration
+      routes:
+        # Authentication Service Routes
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/api/v1/auth/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: authServiceCircuitBreaker
+                fallbackUri: forward:/fallback/auth
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 200
+                redis-rate-limiter.burstCapacity: 400
+        
+        # Customer Service Routes
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/api/v1/customers/**,/api/v1/onboarding/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: customerServiceCircuitBreaker
+                fallbackUri: forward:/fallback/customer
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 150
+                redis-rate-limiter.burstCapacity: 300
+        
+        # Transaction Service Routes
+        - id: transaction-service
+          uri: lb://transaction-service
+          predicates:
+            - Path=/api/v1/transactions/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: transactionServiceCircuitBreaker
+                fallbackUri: forward:/fallback/transaction
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 500
+                redis-rate-limiter.burstCapacity: 1000
+        
+        # Risk Assessment Service Routes
+        - id: risk-assessment-service
+          uri: lb://risk-assessment-service
+          predicates:
+            - Path=/api/v1/risk/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: riskServiceCircuitBreaker
+                fallbackUri: forward:/fallback/risk
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+        
+        # Compliance Service Routes
+        - id: compliance-service
+          uri: lb://compliance-service
+          predicates:
+            - Path=/api/v1/compliance/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: complianceServiceCircuitBreaker
+                fallbackUri: forward:/fallback/compliance
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 75
+                redis-rate-limiter.burstCapacity: 150
+        
+        # Analytics Service Routes
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/api/v1/analytics/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: analyticsServiceCircuitBreaker
+                fallbackUri: forward:/fallback/analytics
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 50
+                redis-rate-limiter.burstCapacity: 100
+        
+        # Financial Wellness Service Routes
+        - id: financial-wellness-service
+          uri: lb://financial-wellness-service
+          predicates:
+            - Path=/api/v1/wellness/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: wellnessServiceCircuitBreaker
+                fallbackUri: forward:/fallback/wellness
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 80
+                redis-rate-limiter.burstCapacity: 160
+        
+        # AI Service Routes
+        - id: ai-service
+          uri: lb://ai-service
+          predicates:
+            - Path=/api/v1/ai/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: aiServiceCircuitBreaker
+                fallbackUri: forward:/fallback/ai
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 25
+                redis-rate-limiter.burstCapacity: 50
+        
+        # Blockchain Service Routes
+        - id: blockchain-service
+          uri: lb://blockchain-service
+          predicates:
+            - Path=/api/v1/blockchain/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: blockchainServiceCircuitBreaker
+                fallbackUri: forward:/fallback/blockchain
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 30
+                redis-rate-limiter.burstCapacity: 60
+        
+        # Notification Service Routes
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/api/v1/notifications/**
+          filters:
+            - name: CircuitBreaker
+              args:
+                name: notificationServiceCircuitBreaker
+                fallbackUri: forward:/fallback/notification
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 100
+                redis-rate-limiter.burstCapacity: 200
+    
+    # Load Balancer Configuration
+    loadbalancer:
+      ribbon:
+        enabled: false
+      retry:
+        enabled: true
+    
+    # Circuit Breaker Configuration
+    circuitbreaker:
+      resilience4j:
+        configs:
+          default:
+            slidingWindowSize: 10
+            minimumNumberOfCalls: 5
+            permittedNumberOfCallsInHalfOpenState: 3
+            automaticTransitionFromOpenToHalfOpenEnabled: true
+            waitDurationInOpenState: 30s
+            failureRateThreshold: 50
+            eventConsumerBufferSize: 10
+            slowCallRateThreshold: 100
+            slowCallDurationThreshold: 2s
+        instances:
+          defaultCircuitBreaker:
+            baseConfig: default
+          authServiceCircuitBreaker:
+            baseConfig: default
+            waitDurationInOpenState: 20s
+          customerServiceCircuitBreaker:
+            baseConfig: default
+            waitDurationInOpenState: 25s
+          transactionServiceCircuitBreaker:
+            baseConfig: default
+            failureRateThreshold: 30
+            waitDurationInOpenState: 45s
+          riskServiceCircuitBreaker:
+            baseConfig: default
+            slowCallDurationThreshold: 5s
+          complianceServiceCircuitBreaker:
+            baseConfig: default
+            slowCallDurationThreshold: 10s
+          analyticsServiceCircuitBreaker:
+            baseConfig: default
+            slowCallDurationThreshold: 15s
+          wellnessServiceCircuitBreaker:
+            baseConfig: default
+          aiServiceCircuitBreaker:
+            baseConfig: default
+            slowCallDurationThreshold: 30s
+          blockchainServiceCircuitBreaker:
+            baseConfig: default
+            slowCallDurationThreshold: 20s
+          notificationServiceCircuitBreaker:
+            baseConfig: default
+
+# Server Configuration
+server:
+  port: 8080
+  shutdown: graceful
+  tomcat:
+    connection-timeout: 30s
+    keep-alive-timeout: 30s
+    max-connections: 10000
+    threads:
+      max: 200
+      min-spare: 10
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+    min-response-size: 1024
+
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://discovery-service:8761/eureka/
+    healthcheck:
+      enabled: true
+    fetch-registry: true
+    register-with-eureka: true
+    registry-fetch-interval-seconds: 30
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-connect-timeout-seconds: 10
+    eureka-server-read-timeout-seconds: 10
+  instance:
+    hostname: ${spring.application.name}
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    metadata-map:
+      version: ${spring.application.version:1.0.0}
+      environment: ${spring.profiles.active:default}
+      health-check-url-path: /actuator/health
+
+# Redis Configuration for Rate Limiting
+spring.redis:
+  host: redis-service
+  port: 6379
+  timeout: 2000ms
+  lettuce:
+    pool:
+      max-active: 8
+      max-idle: 8
+      min-idle: 0
+      max-wait: -1ms
+
+# Management and Monitoring Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+      base-path: /actuator
+      cors:
+        allowed-origins: '*'
+        allowed-methods: GET,POST
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    gateway:
+      enabled: true
+  health:
+    circuitbreakers:
+      enabled: true
+    ratelimiters:
+      enabled: true
+    diskspace:
+      enabled: true
+    ping:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name}
+      environment: ${spring.profiles.active:default}
+    export:
+      prometheus:
+        enabled: true
+        step: 1m
+        descriptions: true
+        pushgateway:
+          enabled: false
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+        resilience4j.ratelimiter.calls: true
+      percentiles:
+        http.server.requests: 0.5, 0.95, 0.99, 0.999
+        resilience4j.circuitbreaker.calls: 0.5, 0.95, 0.99
+        resilience4j.ratelimiter.calls: 0.5, 0.95, 0.99
+      sla:
+        http.server.requests: 100ms,500ms,1s,2s,5s
+  tracing:
+    sampling:
+      probability: 1.0
+  zipkin:
+    tracing:
+      endpoint: http://jaeger-service:9411/api/v2/spans
+
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.ufs.apigateway: DEBUG
+    org.springframework.cloud.gateway: DEBUG
+    org.springframework.cloud.circuitbreaker: DEBUG
+    org.springframework.cloud.gateway.filter.ratelimit: DEBUG
+    org.springframework.web.reactive: DEBUG
+    reactor.netty: INFO
+    io.github.resilience4j: DEBUG
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  file:
+    name: logs/api-gateway.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+
+# Security Configuration
+spring.security:
+  oauth2:
+    resourceserver:
+      jwt:
+        issuer-uri: http://auth-service:8080/realms/financial-services
+        jwk-set-uri: http://auth-service:8080/realms/financial-services/protocol/openid-connect/certs
+
+# Resilience4j Configuration
+resilience4j:
+  timelimiter:
+    configs:
+      default:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+    instances:
+      authService:
+        baseConfig: default
+        timeoutDuration: 5s
+      transactionService:
+        baseConfig: default
+        timeoutDuration: 15s
+      aiService:
+        baseConfig: default
+        timeoutDuration: 30s
+      blockchainService:
+        baseConfig: default
+        timeoutDuration: 25s
+  
+  ratelimiter:
+    configs:
+      default:
+        limitForPeriod: 100
+        limitRefreshPeriod: 1s
+        timeoutDuration: 0s
+        eventConsumerBufferSize: 100
+    instances:
+      globalRateLimit:
+        baseConfig: default
+        limitForPeriod: 1000
+      authServiceRateLimit:
+        baseConfig: default
+        limitForPeriod: 200
+      transactionServiceRateLimit:
+        baseConfig: default
+        limitForPeriod: 500
+
+# Gateway Specific Configuration
+gateway:
+  timeout:
+    connect: 5s
+    response: 30s
+  pool:
+    maxConnections: 500
+    maxIdleTime: 30s
+    maxLifeTime: 60s
+    pendingAcquireTimeout: 45s
+  ssl:
+    useInsecureTrustManager: false
+  httpclient:
+    wiretap: false
+    compression: true
+    pool:
+      type: ELASTIC
+      maxConnections: 500
+      maxIdleTime: 30s
+      maxLifeTime: 60s
+
+# Actuator Info
+info:
+  app:
+    name: ${spring.application.name}
+    description: Unified Financial Services API Gateway
+    version: 1.0.0
+    encoding: UTF-8
+    java:
+      version: 21
+  build:
+    artifact: api-gateway
+    name: API Gateway Service
+    time: 2024-01-01T00:00:00.000Z
+    version: 1.0.0
+  git:
+    branch: main
+    commit:
+      id: latest
+      time: 2024-01-01T00:00:00.000Z
+  system:
+    environment: ${spring.profiles.active:default}
+
+# Spring Profiles Configuration
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+  cloud:
+    gateway:
+      default-filters:
+        - DedupeResponseHeader=Access-Control-Allow-Credentials Access-Control-Allow-Origin
+        - name: RequestRateLimiter
+          args:
+            redis-rate-limiter.replenishRate: 1000
+            redis-rate-limiter.burstCapacity: 2000
+
+logging:
+  level:
+    com.ufs.apigateway: TRACE
+    org.springframework.cloud.gateway: TRACE
+
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+  cloud:
+    gateway:
+      globalcors:
+        corsConfigurations:
+          '[/**]':
+            allowedOrigins: 
+              - "https://app.unifiedfinancialservices.com"
+              - "https://admin.unifiedfinancialservices.com"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+
+server:
+  tomcat:
+    threads:
+      max: 400
+      min-spare: 20
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,gateway,metrics
+
+logging:
+  level:
+    root: WARN
+    com.ufs.apigateway: INFO
+    org.springframework.cloud.gateway: WARN
+  file:
+    max-size: 500MB
+    max-history: 60
+    total-size-cap: 5GB

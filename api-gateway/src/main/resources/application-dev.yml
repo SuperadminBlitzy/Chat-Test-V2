@@ -1,0 +1,645 @@
+# =============================================================================
+# API Gateway Development Configuration
+# Unified Financial Services Platform
+# =============================================================================
+# This configuration file provides development-specific settings for the
+# API Gateway service, including service discovery, routing, security,
+# and monitoring configurations optimized for financial services.
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Server Configuration
+# -----------------------------------------------------------------------------
+server:
+  port: 8080
+  # Enable graceful shutdown for zero-downtime deployments
+  shutdown: graceful
+  # Configure connection timeouts for financial transaction processing
+  netty:
+    connection-timeout: 30s
+    idle-timeout: 60s
+  # Enable HTTP/2 for improved performance
+  http2:
+    enabled: true
+
+# -----------------------------------------------------------------------------
+# Spring Application Configuration
+# -----------------------------------------------------------------------------
+spring:
+  application:
+    name: api-gateway
+  
+  # Profile-specific configuration
+  profiles:
+    active: dev
+  
+  # Main configuration
+  main:
+    # Allow bean definition overriding for development flexibility
+    allow-bean-definition-overriding: true
+  
+  # -----------------------------------------------------------------------------
+  # Spring Cloud Gateway Configuration
+  # -----------------------------------------------------------------------------
+  cloud:
+    gateway:
+      # Global configuration
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOrigins: "http://localhost:3000"
+            allowedMethods:
+              - GET
+              - POST
+              - PUT
+              - DELETE
+              - OPTIONS
+            allowedHeaders: "*"
+            allowCredentials: true
+            maxAge: 3600
+      
+      # Service discovery integration
+      discovery:
+        locator:
+          # Enable service discovery for automatic route creation
+          enabled: true
+          # Convert service names to lowercase for consistent routing
+          lower-case-service-id: true
+          # URL path prefix for discovered services
+          url-expression: "'lb://'+serviceId"
+      
+      # HTTP client configuration for financial services
+      httpclient:
+        # Connection pool configuration
+        pool:
+          type: elastic
+          max-connections: 1000
+          max-idle-time: 30s
+          max-life-time: 60s
+        # Connection timeout for financial transactions
+        connect-timeout: 5000
+        # Response timeout for financial operations
+        response-timeout: 30s
+        # SSL configuration for secure communication
+        ssl:
+          use-insecure-trust-manager: false
+          handshake-timeout: 10s
+          close-notify-flush-timeout: 3s
+          close-notify-read-timeout: 0s
+      
+      # -----------------------------------------------------------------------------
+      # Route Definitions for Financial Services
+      # -----------------------------------------------------------------------------
+      routes:
+        # Authentication Service Route
+        - id: auth-service
+          uri: lb://auth-service
+          predicates:
+            - Path=/auth/**
+          filters:
+            # Add security headers for financial compliance
+            - AddResponseHeader=X-Content-Type-Options, nosniff
+            - AddResponseHeader=X-Frame-Options, DENY
+            - AddResponseHeader=X-XSS-Protection, 1; mode=block
+            # Rate limiting for authentication endpoints
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 10
+                redis-rate-limiter.burstCapacity: 20
+                redis-rate-limiter.requestedTokens: 1
+          metadata:
+            # Circuit breaker configuration for auth service
+            response-timeout: 10000
+            connect-timeout: 5000
+            # Retry configuration
+            retry:
+              retries: 3
+              statuses: BAD_GATEWAY,GATEWAY_TIMEOUT
+              methods: GET,POST
+              backoff:
+                firstBackoff: 50ms
+                maxBackoff: 500ms
+                factor: 2
+        
+        # Customer Service Route
+        - id: customer-service
+          uri: lb://customer-service
+          predicates:
+            - Path=/customers/**,/onboarding/**
+          filters:
+            # Customer data protection headers
+            - AddResponseHeader=Cache-Control, no-store, no-cache, must-revalidate
+            - AddResponseHeader=Pragma, no-cache
+            - AddResponseHeader=Expires, 0
+            # Request/Response logging for audit compliance
+            - name: RequestLogging
+              args:
+                enabled: true
+                includeHeaders: true
+                includeQueryParams: true
+          metadata:
+            # Higher timeout for KYC/AML processing
+            response-timeout: 30000
+            connect-timeout: 10000
+            # Customer service specific retry policy
+            retry:
+              retries: 2
+              statuses: INTERNAL_SERVER_ERROR,BAD_GATEWAY
+              methods: GET,PUT,POST
+        
+        # Transaction Service Route
+        - id: transaction-service
+          uri: lb://transaction-service
+          predicates:
+            - Path=/transactions/**
+          filters:
+            # Transaction correlation ID for audit trails
+            - AddRequestHeader=X-Correlation-ID, ${spring.cloud.gateway.x-correlation-id}
+            - AddRequestHeader=X-Request-ID, ${spring.cloud.gateway.x-request-id}
+            # Enhanced security for financial transactions
+            - AddResponseHeader=Strict-Transport-Security, max-age=31536000; includeSubDomains
+          metadata:
+            # Critical timeout settings for transaction processing
+            response-timeout: 60000
+            connect-timeout: 5000
+            # Aggressive retry for failed transactions
+            retry:
+              retries: 5
+              statuses: BAD_GATEWAY,GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+              methods: GET,POST
+              backoff:
+                firstBackoff: 100ms
+                maxBackoff: 2000ms
+                factor: 2
+        
+        # Risk Assessment Service Route
+        - id: risk-assessment-service
+          uri: lb://risk-assessment-service
+          predicates:
+            - Path=/risk/**
+          filters:
+            # AI/ML processing headers
+            - AddRequestHeader=X-Processing-Priority, HIGH
+            - AddResponseHeader=X-Risk-Assessment-Version, v2.1
+          metadata:
+            # Extended timeout for AI/ML risk processing
+            response-timeout: 45000
+            connect-timeout: 8000
+            retry:
+              retries: 3
+              statuses: INTERNAL_SERVER_ERROR,BAD_GATEWAY
+              methods: GET,POST
+        
+        # Compliance Service Route
+        - id: compliance-service
+          uri: lb://compliance-service
+          predicates:
+            - Path=/compliance/**
+          filters:
+            # Regulatory compliance headers
+            - AddResponseHeader=X-Regulatory-Framework, BASEL-III,GDPR,SOX
+            - AddResponseHeader=X-Compliance-Version, 2024.1
+            # Audit trail enhancement
+            - name: AuditLog
+              args:
+                enabled: true
+                includeRequestBody: true
+                includeResponseBody: true
+          metadata:
+            # Compliance processing timeout
+            response-timeout: 20000
+            connect-timeout: 5000
+            retry:
+              retries: 2
+              statuses: INTERNAL_SERVER_ERROR
+              methods: GET,POST
+        
+        # Analytics Service Route
+        - id: analytics-service
+          uri: lb://analytics-service
+          predicates:
+            - Path=/analytics/**
+          filters:
+            # Analytics-specific headers
+            - AddRequestHeader=X-Analytics-Tier, REAL_TIME
+            - AddResponseHeader=X-Data-Freshness, ${spring.cloud.gateway.data-freshness}
+          metadata:
+            # Analytics query timeout
+            response-timeout: 120000
+            connect-timeout: 10000
+            retry:
+              retries: 1
+              statuses: GATEWAY_TIMEOUT
+              methods: GET
+        
+        # Financial Wellness Service Route
+        - id: financial-wellness-service
+          uri: lb://financial-wellness-service
+          predicates:
+            - Path=/wellness/**
+          filters:
+            # Customer engagement headers
+            - AddResponseHeader=X-Wellness-Insights, ENABLED
+            - AddResponseHeader=X-Personalization, ACTIVE
+          metadata:
+            response-timeout: 15000
+            connect-timeout: 5000
+            retry:
+              retries: 2
+              statuses: INTERNAL_SERVER_ERROR,BAD_GATEWAY
+              methods: GET,POST
+        
+        # Blockchain Service Route
+        - id: blockchain-service
+          uri: lb://blockchain-service
+          predicates:
+            - Path=/blockchain/**
+          filters:
+            # Blockchain-specific headers for Hyperledger Fabric
+            - AddRequestHeader=X-Blockchain-Network, hyperledger-fabric
+            - AddRequestHeader=X-Consensus-Algorithm, RAFT
+            - AddResponseHeader=X-Block-Height, ${spring.cloud.gateway.block-height}
+          metadata:
+            # Extended timeout for blockchain operations
+            response-timeout: 90000
+            connect-timeout: 15000
+            retry:
+              retries: 3
+              statuses: GATEWAY_TIMEOUT,SERVICE_UNAVAILABLE
+              methods: GET,POST
+        
+        # Notification Service Route
+        - id: notification-service
+          uri: lb://notification-service
+          predicates:
+            - Path=/notifications/**
+          filters:
+            # Notification delivery headers
+            - AddRequestHeader=X-Notification-Priority, NORMAL
+            - AddResponseHeader=X-Delivery-Guarantee, AT_LEAST_ONCE
+          metadata:
+            response-timeout: 10000
+            connect-timeout: 3000
+            retry:
+              retries: 3
+              statuses: INTERNAL_SERVER_ERROR,BAD_GATEWAY
+              methods: GET,POST
+        
+        # AI Service Route
+        - id: ai-service
+          uri: lb://ai-service
+          predicates:
+            - Path=/ai/**
+          filters:
+            # AI/ML processing headers
+            - AddRequestHeader=X-AI-Model-Version, v3.2
+            - AddRequestHeader=X-Processing-Mode, INFERENCE
+            - AddResponseHeader=X-AI-Confidence-Score, ${spring.cloud.gateway.ai-confidence}
+          metadata:
+            # Extended timeout for AI/ML inference
+            response-timeout: 60000
+            connect-timeout: 10000
+            retry:
+              retries: 2
+              statuses: INTERNAL_SERVER_ERROR,GATEWAY_TIMEOUT
+              methods: GET,POST
+
+# -----------------------------------------------------------------------------
+# Eureka Service Discovery Configuration
+# -----------------------------------------------------------------------------
+eureka:
+  client:
+    # Service registry configuration
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka
+    # Enable service registration
+    register-with-eureka: true
+    # Enable service discovery
+    fetch-registry: true
+    # Registry fetch interval for development
+    registry-fetch-interval-seconds: 30
+    # Instance info replication interval
+    instance-info-replication-interval-seconds: 30
+    # Eureka server connection timeout
+    eureka-server-connect-timeout-seconds: 10
+    # Eureka server read timeout
+    eureka-server-read-timeout-seconds: 10
+    # Enable gzip compression for Eureka communication
+    gzip-content: true
+    # Disable delta fetches for development stability
+    disable-delta: true
+  
+  instance:
+    # Prefer IP address over hostname for service discovery
+    prefer-ip-address: true
+    # Instance ID format for uniqueness
+    instance-id: ${spring.application.name}:${spring.cloud.client.ip-address}:${server.port}
+    # Health check URL for Eureka
+    health-check-url-path: /actuator/health
+    # Status page URL for monitoring
+    status-page-url-path: /actuator/info
+    # Lease renewal interval
+    lease-renewal-interval-in-seconds: 10
+    # Lease expiration duration
+    lease-expiration-duration-in-seconds: 30
+    # Metadata for service discovery
+    metadata-map:
+      version: "1.0.0"
+      environment: "development"
+      service-type: "api-gateway"
+      financial-tier: "gateway"
+
+# -----------------------------------------------------------------------------
+# Logging Configuration for Development
+# -----------------------------------------------------------------------------
+logging:
+  level:
+    # API Gateway specific logging
+    com.ufs.apigateway: DEBUG
+    # Spring Cloud Gateway detailed logging
+    org.springframework.cloud.gateway: DEBUG
+    # Reactor Netty HTTP client logging
+    reactor.netty.http.client: DEBUG
+    # Eureka client logging
+    com.netflix.eureka: INFO
+    # Spring Security logging
+    org.springframework.security: DEBUG
+    # Circuit breaker logging
+    io.github.resilience4j: DEBUG
+    # Load balancer logging
+    org.springframework.cloud.loadbalancer: DEBUG
+    # Service discovery logging
+    org.springframework.cloud.client.discovery: DEBUG
+  
+  # Logging pattern for development
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] %logger{36} - %msg%n"
+  
+  # Log file configuration for development
+  file:
+    name: logs/api-gateway-dev.log
+    max-size: 100MB
+    max-history: 30
+
+# -----------------------------------------------------------------------------
+# Resilience4j Configuration
+# -----------------------------------------------------------------------------
+resilience4j:
+  # Rate limiter configuration
+  ratelimiter:
+    instances:
+      default:
+        # Allow 1000 requests per period
+        limitForPeriod: 1000
+        # Period duration of 1 second
+        limitRefreshPeriod: 1s
+        # Timeout duration for acquiring permission
+        timeoutDuration: 2s
+        # Enable event publishing for monitoring
+        eventConsumerBufferSize: 100
+        # Register health indicator
+        registerHealthIndicator: true
+  
+  # Circuit breaker configuration
+  circuitbreaker:
+    instances:
+      default:
+        # Failure rate threshold
+        failureRateThreshold: 50
+        # Slow call rate threshold
+        slowCallRateThreshold: 50
+        # Slow call duration threshold
+        slowCallDurationThreshold: 10s
+        # Minimum number of calls before calculation
+        minimumNumberOfCalls: 10
+        # Wait duration in open state
+        waitDurationInOpenState: 60s
+        # Permitted number of calls in half-open state
+        permittedNumberOfCallsInHalfOpenState: 5
+        # Sliding window type
+        slidingWindowType: COUNT_BASED
+        # Sliding window size
+        slidingWindowSize: 20
+        # Register health indicator
+        registerHealthIndicator: true
+        # Enable event publishing
+        eventConsumerBufferSize: 100
+  
+  # Retry configuration
+  retry:
+    instances:
+      default:
+        # Maximum retry attempts
+        maxAttempts: 3
+        # Wait duration between retries
+        waitDuration: 1s
+        # Enable exponential backoff
+        enableExponentialBackoff: true
+        # Exponential backoff multiplier
+        exponentialBackoffMultiplier: 2
+        # Maximum wait duration
+        maxWaitDuration: 10s
+        # Retry on exceptions
+        retryOnExceptions:
+          - java.net.ConnectException
+          - java.net.SocketTimeoutException
+          - org.springframework.web.client.ResourceAccessException
+        # Register health indicator
+        registerHealthIndicator: true
+
+# -----------------------------------------------------------------------------
+# JWT Configuration for Development
+# -----------------------------------------------------------------------------
+jwt:
+  # Base64 encoded secret key for development environment
+  # Note: This is a development-only key, production should use HSM or secure key management
+  secret: c2VjcmV0LWtleS1mb3ItZGV2ZWxvcG1lbnQtZW52aXJvbm1lbnQtdW5pZmllZC1maW5hbmNpYWwtc2VydmljZXM=
+  # Token expiration time in seconds (24 hours for development)
+  expiration: 86400
+  # Issuer identification
+  issuer: unified-financial-services
+  # Token refresh threshold (refresh when 1 hour remaining)
+  refresh-threshold: 3600
+
+# -----------------------------------------------------------------------------
+# CORS Configuration for Development
+# -----------------------------------------------------------------------------
+cors:
+  # Allowed origins for development
+  allowed-origins: http://localhost:3000
+  # Allowed HTTP methods
+  allowed-methods: GET,POST,PUT,DELETE,OPTIONS
+  # Allowed headers
+  allowed-headers: "*"
+  # Allow credentials for authentication
+  allow-credentials: true
+  # Preflight request cache duration
+  max-age: 3600
+  # Exposed headers for client access
+  exposed-headers: X-Correlation-ID,X-Request-ID,X-Response-Time
+
+# -----------------------------------------------------------------------------
+# Management and Monitoring Configuration
+# -----------------------------------------------------------------------------
+management:
+  endpoints:
+    web:
+      exposure:
+        # Expose actuator endpoints for development monitoring
+        include: health,info,metrics,prometheus,gateway,circuitbreakers,ratelimiters
+      base-path: /actuator
+      cors:
+        allowed-origins: "http://localhost:3000"
+        allowed-methods: GET,POST
+  
+  endpoint:
+    health:
+      # Enable detailed health information
+      show-details: always
+      # Include circuit breaker health
+      show-components: always
+    gateway:
+      # Enable gateway endpoint for route inspection
+      enabled: true
+  
+  # Metrics configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        resilience4j.circuitbreaker.calls: true
+        resilience4j.ratelimiter.calls: true
+    tags:
+      application: ${spring.application.name}
+      environment: development
+      version: 1.0.0
+
+# -----------------------------------------------------------------------------
+# Spring Boot Configuration
+# -----------------------------------------------------------------------------
+spring:
+  # Jackson JSON configuration
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+    deserialization:
+      fail-on-unknown-properties: false
+    default-property-inclusion: non_null
+  
+  # Redis configuration for rate limiting and caching
+  redis:
+    host: localhost
+    port: 6379
+    database: 0
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 8
+        max-idle: 8
+        min-idle: 0
+        max-wait: -1ms
+  
+  # Sleuth tracing configuration
+  sleuth:
+    web:
+      client:
+        enabled: true
+    sampler:
+      probability: 1.0
+    zipkin:
+      base-url: http://localhost:9411
+      enabled: true
+
+# -----------------------------------------------------------------------------
+# Application-Specific Configuration
+# -----------------------------------------------------------------------------
+application:
+  # Financial services configuration
+  financial:
+    # Transaction processing configuration
+    transaction:
+      # Maximum transaction amount for enhanced security
+      max-amount: 1000000.00
+      # Supported currencies
+      supported-currencies: USD,EUR,GBP,JPY,CAD,AUD
+      # Fraud detection thresholds
+      fraud-detection:
+        enabled: true
+        velocity-threshold: 100
+        amount-threshold: 50000.00
+    
+    # Compliance configuration
+    compliance:
+      # Regulatory frameworks
+      frameworks: BASEL_III,GDPR,SOX,PCI_DSS
+      # Audit trail retention (days)
+      audit-retention-days: 2555
+      # Data classification levels
+      data-classification: PUBLIC,INTERNAL,CONFIDENTIAL,RESTRICTED
+    
+    # Risk management configuration
+    risk:
+      # Default risk score threshold
+      default-threshold: 750
+      # Risk assessment intervals
+      assessment-intervals:
+        customer: P30D
+        transaction: PT5M
+        portfolio: P1D
+  
+  # Security configuration
+  security:
+    # Authentication configuration
+    auth:
+      # Enable multi-factor authentication
+      mfa-enabled: true
+      # Session timeout (minutes)
+      session-timeout: 30
+      # Password policy enforcement
+      password-policy:
+        min-length: 12
+        require-special-chars: true
+        require-numbers: true
+        require-uppercase: true
+        require-lowercase: true
+    
+    # API security configuration
+    api:
+      # Enable API key authentication
+      api-key-auth: true
+      # Rate limiting per API key
+      rate-limit-per-key: 10000
+      # API versioning strategy
+      versioning-strategy: HEADER
+
+# -----------------------------------------------------------------------------
+# Development-Specific Overrides
+# -----------------------------------------------------------------------------
+# Enable debug mode for development
+debug: false
+
+# Disable security for development endpoints
+security:
+  ignored: /actuator/**,/swagger-ui/**,/v3/api-docs/**
+
+# Enable H2 console for development (if using H2 for testing)
+spring:
+  h2:
+    console:
+      enabled: false
+
+# Development-specific feature flags
+feature:
+  flags:
+    # Enable advanced analytics in development
+    advanced-analytics: true
+    # Enable experimental AI features
+    experimental-ai: true
+    # Enable blockchain integration
+    blockchain-enabled: true
+    # Enable real-time notifications
+    real-time-notifications: true
