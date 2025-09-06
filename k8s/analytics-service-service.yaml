@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: analytics-service
+  namespace: financial-services
+  labels:
+    app: analytics-service
+    tier: backend
+    version: v1.0.0
+    component: analytics
+    criticality: high
+    feature: F-005
+    service-type: predictive-analytics
+    managed-by: kubernetes
+    part-of: financial-platform
+  annotations:
+    # Service discovery and routing annotations
+    service.istio.io/canonical-name: analytics-service
+    service.istio.io/canonical-revision: v1.0.0
+    
+    # Monitoring and observability annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
+    
+    # Kong API Gateway annotations for external exposure
+    konghq.com/strip-path: "true"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "http,https"
+    
+    # Financial services compliance annotations
+    compliance.financial/pci-dss: "required"
+    compliance.financial/data-classification: "confidential"
+    compliance.financial/audit-required: "true"
+    
+    # Service mesh configuration
+    networking.istio.io/exportTo: "."
+    
+    # Load balancing and traffic management
+    service.kubernetes.io/load-balancer-class: "kong"
+    service.kubernetes.io/topology-aware-hints: "auto"
+    
+    # Security annotations
+    security.financial/encryption-required: "true"
+    security.financial/authentication-required: "true"
+    
+    # Documentation and operational metadata
+    documentation: "Kubernetes Service for analytics-service supporting F-005 Predictive Analytics Dashboard"
+    owner: "platform-team"
+    contact: "platform-team@company.com"
+    runbook: "https://wiki.company.com/runbooks/analytics-service"
+    
+    # Change management
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"name":"analytics-service","namespace":"financial-services"}}
+spec:
+  type: ClusterIP
+  selector:
+    app: analytics-service
+    tier: backend
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      appProtocol: http
+    - name: management
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+      appProtocol: http
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+      appProtocol: http
+  # Enable session affinity for consistent analytics processing
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800
+  # Internal traffic policy for improved performance
+  internalTrafficPolicy: Local
+  # IP family configuration for dual-stack support
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4

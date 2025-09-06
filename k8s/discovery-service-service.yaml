@@ -1,0 +1,87 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-service
+  namespace: ufs
+  labels:
+    app: discovery-service
+    component: service-discovery
+    tier: infrastructure
+    version: v1
+    environment: production
+    managed-by: argocd
+    part-of: financial-platform
+  annotations:
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8761"
+    prometheus.io/path: "/actuator/prometheus"
+    # Service discovery metadata
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    # Kong API Gateway integration
+    konghq.com/service-upstream: "discovery-service"
+    # ArgoCD deployment tracking
+    argocd.argoproj.io/sync-wave: "1"
+    # Security annotations
+    security.istio.io/tlsMode: istio
+    # Documentation and support information
+    description: "Spring Cloud Eureka service discovery server for microservices registration and discovery"
+    owner: "platform-team"
+    contact: "platform-team@financial-platform.com"
+    # Business continuity annotations
+    criticality: "high"
+    backup-required: "true"
+    # Compliance tracking
+    compliance.financial-platform.com/pci-dss: "applicable"
+    compliance.financial-platform.com/sox: "applicable"
+spec:
+  type: ClusterIP
+  selector:
+    app: discovery-service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8761
+      targetPort: 8761
+    - name: management
+      protocol: TCP
+      port: 8762
+      targetPort: 8762
+  # Session affinity for consistent service discovery client connections
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  # Internal traffic policy for cluster-internal communications
+  internalTrafficPolicy: Cluster
+---
+# Headless service for direct pod access by service mesh
+apiVersion: v1
+kind: Service
+metadata:
+  name: discovery-service-headless
+  namespace: ufs
+  labels:
+    app: discovery-service
+    component: service-discovery
+    tier: infrastructure
+    version: v1
+    service-type: headless
+  annotations:
+    prometheus.io/scrape: "false"
+    description: "Headless service for direct pod access and service mesh integration"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  selector:
+    app: discovery-service
+  ports:
+    - name: http
+      protocol: TCP
+      port: 8761
+      targetPort: 8761
+    - name: management
+      protocol: TCP
+      port: 8762
+      targetPort: 8762
+  publishNotReadyAddresses: true

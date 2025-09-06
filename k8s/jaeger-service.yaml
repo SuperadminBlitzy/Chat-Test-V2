@@ -1,0 +1,177 @@
+# Jaeger Service for Unified Financial Services Platform
+# Provides distributed tracing capabilities for microservices observability
+# Exposes Jaeger Collector, Query UI, and Agent endpoints for trace collection and visualization
+# Version: 1.51+ as per technical specification 3.3.5 Monitoring & Observability
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: jaeger
+  namespace: monitoring
+  labels:
+    # Kubernetes standard labels for service identification
+    app.kubernetes.io/name: jaeger
+    app.kubernetes.io/component: tracing
+    app.kubernetes.io/part-of: observability-stack
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/version: "1.51"
+    
+    # Environment and tier classification
+    environment: production
+    tier: observability
+    criticality: high
+    
+    # Financial services specific labels
+    financial-platform/service-type: observability
+    financial-platform/compliance: "true"
+    financial-platform/audit-required: "true"
+    financial-platform/data-classification: operational
+    
+    # Monitoring and observability labels
+    monitoring.coreos.com/service: "true"
+    prometheus.io/scrape: "true"
+    
+    # Service mesh integration
+    service-mesh.istio.io/monitored: "true"
+    
+    # Cost allocation and resource management
+    cost-center: observability-infrastructure
+    billing-team: platform-engineering
+    resource-pool: monitoring-services
+    
+    # Quality of Service
+    qos-class: guaranteed
+    service-level: critical
+    
+    # Compliance frameworks
+    compliance/sox: "true"
+    compliance/pci-dss: "true"
+    compliance/gdpr: "true"
+    
+  annotations:
+    # Service description and purpose
+    kubernetes.io/description: "Jaeger distributed tracing service for financial services platform. Provides trace collection, storage, and visualization for microservices observability and performance monitoring."
+    
+    # Contact and ownership information
+    contact.platform/owner: "platform-engineering@financial-platform.com"
+    contact.platform/team: "Observability Team"
+    contact.platform/slack: "#observability"
+    contact.platform/on-call: "observability-oncall@financial-platform.com"
+    
+    # Service discovery and load balancing
+    service.kubernetes.io/load-balancer-source-ranges: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    service.kubernetes.io/session-affinity: "ClientIP"
+    service.kubernetes.io/session-affinity-timeout: "3600"
+    
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "14269"
+    prometheus.io/path: "/metrics"
+    prometheus.io/scheme: "http"
+    
+    # Service mesh configuration
+    service-mesh.istio.io/traffic-policy: "observability"
+    service-mesh.istio.io/circuit-breaker: "enabled"
+    
+    # Network policy annotations
+    network-policy.kubernetes.io/ingress-policy: "observability-ingress"
+    network-policy.kubernetes.io/egress-policy: "observability-egress"
+    
+    # Security annotations
+    security.kubernetes.io/tls-policy: "optional"
+    security.kubernetes.io/audit-level: "metadata"
+    
+    # Performance and scaling annotations
+    scaling.kubernetes.io/min-replicas: "1"
+    scaling.kubernetes.io/max-replicas: "3"
+    scaling.kubernetes.io/target-cpu: "70"
+    
+    # Backup and disaster recovery
+    backup.financial-platform/enabled: "false"
+    disaster-recovery.financial-platform/rpo: "30minutes"
+    disaster-recovery.financial-platform/rto: "5minutes"
+    
+    # Documentation and support
+    documentation.financial-platform/runbook: "https://docs.financial-platform.com/observability/jaeger/runbook"
+    documentation.financial-platform/architecture: "https://docs.financial-platform.com/observability/jaeger/architecture"
+    documentation.financial-platform/troubleshooting: "https://docs.financial-platform.com/observability/jaeger/troubleshooting"
+    
+    # Integration metadata
+    integration.financial-platform/prometheus: "true"
+    integration.financial-platform/grafana: "true"
+    integration.financial-platform/alertmanager: "true"
+    
+    # Compliance and audit trail
+    audit.financial-platform/log-level: "info"
+    audit.financial-platform/retention-period: "90days"
+    compliance.financial-platform/data-retention-policy: "observability-policy"
+
+spec:
+  # Service type - ClusterIP for internal cluster communication
+  type: ClusterIP
+  
+  # Service selector to match Jaeger deployment pods
+  # Must match the labels in the Jaeger deployment spec.template.metadata.labels
+  selector:
+    app.kubernetes.io/name: jaeger
+  
+  # Port configuration for all Jaeger components and protocols
+  ports:
+    # Jaeger Collector - gRPC endpoint for high-performance trace ingestion
+    - name: grpc-collector
+      port: 14250
+      targetPort: 14250
+      protocol: TCP
+      # gRPC port for efficient binary trace data collection from instrumented applications
+      
+    # Jaeger Collector - HTTP endpoint for trace submission
+    - name: http-collector
+      port: 14268
+      targetPort: 14268
+      protocol: TCP
+      # HTTP port for JSON/Thrift trace data submission, compatible with various SDKs
+      
+    # Jaeger Query UI - Web interface for trace visualization and analysis
+    - name: http-query
+      port: 16686
+      targetPort: 16686
+      protocol: TCP
+      # Web UI port for trace search, visualization, and performance analysis
+      
+    # Zipkin compatibility endpoint for existing Zipkin instrumentation
+    - name: zipkin
+      port: 9411
+      targetPort: 9411
+      protocol: TCP
+      # Zipkin-compatible endpoint for organizations migrating from Zipkin
+      
+    # Jaeger Agent - Compact Thrift protocol over UDP
+    - name: agent-compact
+      port: 6831
+      targetPort: 6831
+      protocol: UDP
+      # UDP port for compact Thrift binary protocol, low-overhead trace submission
+      
+    # Jaeger Agent - Binary Thrift protocol over UDP
+    - name: agent-binary
+      port: 6832
+      targetPort: 6832
+      protocol: UDP
+      # UDP port for binary Thrift protocol, alternative to compact format
+  
+  # Session affinity configuration for consistent user experience
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  
+  # Service topology configuration for efficient traffic routing
+  topologyKeys:
+    - "kubernetes.io/hostname"
+    - "topology.kubernetes.io/zone"
+    - "topology.kubernetes.io/region"
+  
+  # IP family configuration for dual-stack support
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4

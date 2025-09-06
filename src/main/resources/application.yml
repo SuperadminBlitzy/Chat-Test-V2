@@ -1,0 +1,705 @@
+# =====================================================
+# Risk Assessment Service Configuration
+# Spring Boot 3.2+ Enterprise Configuration
+# Financial Services Platform - Production Ready
+# =====================================================
+
+# Core Application Configuration
+spring:
+  application:
+    name: risk-assessment-service
+  
+  # Profiles Configuration for Environment-specific Settings
+  profiles:
+    active: ${ENVIRONMENT:development}
+  
+  # External Configuration Server Integration
+  config:
+    import: optional:configserver:http://config-server:8888
+  
+  # Primary PostgreSQL Database Configuration
+  datasource:
+    url: jdbc:postgresql://postgresql:5432/risk_db
+    username: risk_user
+    password: ${cipher}encrypted_password
+    driver-class-name: org.postgresql.Driver
+    
+    # HikariCP Connection Pool Configuration (Production Optimized)
+    hikari:
+      pool-name: RiskAssessmentPool
+      maximum-pool-size: 20
+      minimum-idle: 10
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 30000
+      validation-timeout: 5000
+      initialization-fail-timeout: 1
+      isolate-internal-queries: false
+      allow-pool-suspension: false
+      read-only: false
+      register-mbeans: true
+      catalog: risk_db
+      connection-test-query: SELECT 1
+      auto-commit: true
+      transaction-isolation: TRANSACTION_READ_COMMITTED
+      schema: public
+      
+    # Connection Properties for Performance and Security
+    properties:
+      hibernate.connection.provider_disables_autocommit: true
+      hibernate.connection.autocommit: false
+      hibernate.jdbc.batch_size: 50
+      hibernate.order_inserts: true
+      hibernate.order_updates: true
+      hibernate.jdbc.batch_versioned_data: true
+      hibernate.connection.CharSet: utf8mb4
+      hibernate.connection.characterEncoding: utf8
+      hibernate.connection.useUnicode: true
+      ssl: true
+      sslmode: require
+      sslcert: /etc/ssl/client-cert.pem
+      sslkey: /etc/ssl/client-key.pem
+      sslrootcert: /etc/ssl/ca-cert.pem
+      connectTimeout: 30
+      socketTimeout: 60
+      loginTimeout: 30
+      prepareThreshold: 5
+      preparedStatementCacheQueries: 256
+      preparedStatementCacheSizeMiB: 10
+      defaultRowFetchSize: 1000
+      logUnclosedConnections: true
+      assumeMinServerVersion: 12.0
+      
+  # JPA and Hibernate Configuration
+  jpa:
+    hibernate:
+      ddl-auto: validate
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.SnakeCasePhysicalNamingStrategy
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    show-sql: false
+    format-sql: true
+    generate-ddl: false
+    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+    
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc.lob.non_contextual_creation: true
+        
+        # Performance Optimizations
+        cache.use_second_level_cache: true
+        cache.use_query_cache: true
+        cache.region.factory_class: org.hibernate.cache.jcache.JCacheRegionFactory
+        javax.cache.provider: org.ehcache.jsr107.EhcacheCachingProvider
+        
+        # Batch Processing Configuration
+        jdbc.batch_size: 50
+        order_inserts: true
+        order_updates: true
+        jdbc.batch_versioned_data: true
+        
+        # Statement Logging and Statistics
+        show_sql: false
+        use_sql_comments: false
+        format_sql: false
+        generate_statistics: true
+        
+        # Connection and Transaction Management
+        connection.provider_disables_autocommit: true
+        connection.autocommit: false
+        current_session_context_class: org.springframework.orm.hibernate5.SpringSessionContext
+        
+        # Schema Validation and Generation
+        hbm2ddl.auto: validate
+        temp.use_jdbc_metadata_defaults: false
+        
+        # Audit and Security
+        envers.audit_table_suffix: _audit
+        envers.revision_field_name: revision_id
+        envers.revision_type_field_name: revision_type
+        
+  # MongoDB Configuration for Document Storage
+  data:
+    mongodb:
+      uri: mongodb://mongodb:27017/risk_db
+      
+      # Connection Pool Configuration
+      options:
+        max-connection-pool-size: 100
+        min-connection-pool-size: 10
+        max-connection-idle-time: 300000
+        max-connection-life-time: 600000
+        connection-timeout: 10000
+        socket-timeout: 10000
+        server-selection-timeout: 30000
+        wait-queue-timeout: 10000
+        
+        # Read/Write Configuration
+        read-preference: secondaryPreferred
+        write-concern: majority
+        read-concern: majority
+        
+        # SSL/TLS Configuration
+        ssl-enabled: true
+        ssl-invalid-hostname-allowed: false
+        
+        # Compression and Performance
+        compressors: snappy,zlib
+        heartbeat-frequency: 10000
+        min-heartbeat-frequency: 500
+        
+        # Connection String Options
+        retry-writes: true
+        retry-reads: true
+        max-staleness: 90
+        
+  # Apache Kafka Configuration for Event-Driven Architecture
+  kafka:
+    bootstrap-servers: kafka:9092
+    
+    # Consumer Configuration
+    consumer:
+      group-id: risk-assessment-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      auto-commit-interval: 5000
+      session-timeout: 30000
+      heartbeat-interval: 3000
+      max-poll-records: 500
+      max-poll-interval: 300000
+      fetch-min-size: 1024
+      fetch-max-wait: 500
+      max-partition-fetch-bytes: 1048576
+      
+      # Serialization Configuration
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      
+      # JSON Deserializer Properties
+      properties:
+        spring.json.trusted.packages: 'com.ufs.risk.event,com.ufs.common.event'
+        spring.json.use.type.headers: false
+        spring.json.add.type.headers: false
+        spring.json.remove.type.headers: false
+        spring.json.type.mapping: 'riskAssessmentRequest:com.ufs.risk.event.RiskAssessmentRequestEvent,fraudDetectionRequest:com.ufs.risk.event.FraudDetectionRequestEvent'
+        
+        # Security Configuration
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME:risk_user}" password="${KAFKA_PASSWORD:encrypted_password}";
+        ssl.truststore.location: /etc/ssl/kafka-truststore.jks
+        ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD:truststore_password}
+        ssl.keystore.location: /etc/ssl/kafka-keystore.jks
+        ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD:keystore_password}
+        ssl.key.password: ${KAFKA_KEY_PASSWORD:key_password}
+        ssl.endpoint.identification.algorithm: https
+        
+        # Error Handling
+        spring.kafka.consumer.properties.spring.json.value.default.type: com.ufs.risk.event.GenericEvent
+        
+    # Producer Configuration
+    producer:
+      retries: 3
+      batch-size: 16384
+      buffer-memory: 33554432
+      compression-type: snappy
+      linger-ms: 10
+      request-timeout-ms: 30000
+      delivery-timeout-ms: 120000
+      max-in-flight-requests-per-connection: 5
+      enable-idempotence: true
+      acks: all
+      
+      # Serialization Configuration
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      
+      # JSON Serializer Properties
+      properties:
+        spring.json.add.type.headers: false
+        
+        # Security Configuration (same as consumer)
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME:risk_user}" password="${KAFKA_PASSWORD:encrypted_password}";
+        ssl.truststore.location: /etc/ssl/kafka-truststore.jks
+        ssl.truststore.password: ${KAFKA_TRUSTSTORE_PASSWORD:truststore_password}
+        ssl.keystore.location: /etc/ssl/kafka-keystore.jks
+        ssl.keystore.password: ${KAFKA_KEYSTORE_PASSWORD:keystore_password}
+        ssl.key.password: ${KAFKA_KEY_PASSWORD:key_password}
+        ssl.endpoint.identification.algorithm: https
+        
+    # Administrative Configuration
+    admin:
+      properties:
+        bootstrap.servers: kafka:9092
+        security.protocol: SASL_SSL
+        sasl.mechanism: SCRAM-SHA-256
+        sasl.jaas.config: org.apache.kafka.common.security.scram.ScramLoginModule required username="${KAFKA_USERNAME:risk_user}" password="${KAFKA_PASSWORD:encrypted_password}";
+        
+  # Redis Cache Configuration
+  redis:
+    host: redis
+    port: 6379
+    password: ${REDIS_PASSWORD:redis_password}
+    database: 0
+    timeout: 5000ms
+    ssl: true
+    
+    # Connection Pool Configuration (Lettuce)
+    lettuce:
+      pool:
+        max-active: 50
+        max-idle: 25
+        min-idle: 10
+        max-wait: 10000ms
+        time-between-eviction-runs: 30000ms
+        
+    # Jedis Configuration (Alternative)
+    jedis:
+      pool:
+        max-active: 50
+        max-idle: 25
+        min-idle: 10
+        max-wait: 10000ms
+        
+  # Distributed Tracing Configuration
+  sleuth:
+    sampler:
+      probability: 0.1
+    zipkin:
+      base-url: http://zipkin:9411
+    jaeger:
+      remote-controlled-sampler:
+        host-port: jaeger:14268
+    web:
+      additional-skip-patterns: /actuator.*,/health.*,/metrics.*
+      
+  # Security Configuration
+  security:
+    oauth2:
+      resourceserver:
+        jwt:
+          issuer-uri: ${JWT_ISSUER_URI:http://auth-server:8080/auth/realms/financial-services}
+          jwk-set-uri: ${JWT_JWK_SET_URI:http://auth-server:8080/auth/realms/financial-services/protocol/openid_connect/certs}
+          
+# Server Configuration
+server:
+  port: 8082
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json,application/xml
+    min-response-size: 1024
+  http2:
+    enabled: true
+  
+  # SSL/TLS Configuration
+  ssl:
+    enabled: true
+    key-store: /etc/ssl/keystore.p12
+    key-store-password: ${KEYSTORE_PASSWORD:keystore_password}
+    key-store-type: PKCS12
+    key-alias: risk-assessment-service
+    trust-store: /etc/ssl/truststore.jks
+    trust-store-password: ${TRUSTSTORE_PASSWORD:truststore_password}
+    trust-store-type: JKS
+    client-auth: want
+    protocol: TLS
+    enabled-protocols: TLSv1.3,TLSv1.2
+    ciphers: TLS_AES_256_GCM_SHA384,TLS_CHACHA20_POLY1305_SHA256,TLS_AES_128_GCM_SHA256,TLS_ECDHE_RSA_WITH_AES_256_GCM_SHA384,TLS_ECDHE_RSA_WITH_CHACHA20_POLY1305_SHA256
+    
+  # Error and Servlet Configuration
+  error:
+    whitelabel:
+      enabled: false
+    include-message: on_param
+    include-binding-errors: on_param
+    include-stacktrace: on_param
+    include-exception: false
+    
+  servlet:
+    context-path: /risk-assessment
+    session:
+      timeout: 30m
+      cookie:
+        name: RISK_ASSESSMENT_SESSION
+        secure: true
+        http-only: true
+        same-site: strict
+        max-age: 1800
+        
+  # Tomcat Configuration
+  tomcat:
+    max-threads: 200
+    min-spare-threads: 20
+    max-connections: 8192
+    accept-count: 100
+    connection-timeout: 30000
+    max-http-form-post-size: 2MB
+    max-swallow-size: 2MB
+    
+# Eureka Service Discovery Configuration
+eureka:
+  client:
+    service-url:
+      defaultZone: http://discovery-service:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+    eureka-service-url-poll-interval-seconds: 300
+    eureka-server-read-timeout-seconds: 8
+    eureka-server-connect-timeout-seconds: 5
+    eureka-server-total-connections: 200
+    eureka-server-total-connections-per-host: 50
+    eureka-connection-idle-timeout-seconds: 30
+    heartbeat-executor-thread-pool-size: 2
+    heartbeat-executor-exponential-back-off-bound: 10
+    cache-refresh-executor-thread-pool-size: 2
+    cache-refresh-executor-exponential-back-off-bound: 10
+    use-dns-for-fetching-service-urls: false
+    prefer-same-zone-eureka: true
+    filter-only-up-instances: true
+    
+  instance:
+    hostname: ${HOSTNAME:risk-assessment-service}
+    instance-id: ${spring.application.name}:${server.port}:${random.value}
+    prefer-ip-address: false
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    virtual-host-name: ${spring.application.name}
+    secure-virtual-host-name: ${spring.application.name}
+    non-secure-port-enabled: false
+    secure-port-enabled: true
+    secure-port: ${server.port}
+    status-page-url-path: /actuator/info
+    health-check-url-path: /actuator/health
+    metadata-map:
+      version: ${project.version:1.0.0}
+      environment: ${ENVIRONMENT:development}
+      zone: ${ZONE:default}
+      management.context-path: /actuator
+      
+# Spring Boot Actuator Configuration
+management:
+  endpoints:
+    web:
+      exposure:
+        include: '*'
+      base-path: /actuator
+      path-mapping:
+        health: health
+        info: info
+        metrics: metrics
+        prometheus: prometheus
+        
+  endpoint:
+    health:
+      show-details: when-authorized
+      show-components: when-authorized
+      probes:
+        enabled: true
+      group:
+        liveness:
+          include: livenessState,diskSpace,ping
+        readiness:
+          include: readinessState,db,redis,kafka
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+    beans:
+      enabled: true
+    configprops:
+      enabled: true
+    env:
+      enabled: true
+      show-values: when-authorized
+    loggers:
+      enabled: true
+    threaddump:
+      enabled: true
+    heapdump:
+      enabled: true
+    
+  # Metrics Configuration
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 10s
+        descriptions: true
+        histogram-flavor: prometheus
+      elastic:
+        enabled: true
+        host: http://elasticsearch:9200
+        index: risk-assessment-metrics
+        step: 30s
+        
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+        spring.kafka.consumer: true
+        spring.kafka.producer: true
+      percentiles:
+        http.server.requests: 0.5,0.75,0.95,0.99
+        spring.kafka.consumer: 0.5,0.75,0.95,0.99
+        spring.kafka.producer: 0.5,0.75,0.95,0.99
+      slo:
+        http.server.requests: 100ms,500ms,1s,2s,5s
+        
+    tags:
+      application: ${spring.application.name}
+      environment: ${ENVIRONMENT:development}
+      version: ${project.version:1.0.0}
+      
+  # Health Indicators Configuration
+  health:
+    probes:
+      enabled: true
+    livenessstate:
+      enabled: true
+    readinessstate:
+      enabled: true
+    db:
+      enabled: true
+    redis:
+      enabled: true
+    kafka:
+      enabled: true
+    mail:
+      enabled: false
+    ldap:
+      enabled: false
+      
+  # Info Endpoint Configuration
+  info:
+    build:
+      enabled: true
+    env:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    java:
+      enabled: true
+    os:
+      enabled: true
+      
+# Logging Configuration
+logging:
+  level:
+    root: INFO
+    com.ufs.risk: DEBUG
+    org.springframework.web: INFO
+    org.springframework.security: DEBUG
+    org.springframework.kafka: INFO
+    org.springframework.data.mongodb: INFO
+    org.hibernate.SQL: ERROR
+    org.hibernate.type.descriptor.sql.BasicBinder: ERROR
+    org.apache.kafka: WARN
+    org.mongodb.driver: WARN
+    org.springframework.cloud.netflix.eureka: INFO
+    org.springframework.web.client.RestTemplate: DEBUG
+    
+  pattern:
+    console: '%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(%5p) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n%wEx'
+    file: '%d{yyyy-MM-dd HH:mm:ss.SSS} %5p ${PID:- } --- [%t] %-40.40logger{39} : %m%n'
+    
+  file:
+    name: /var/log/risk-assessment-service/application.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 3GB
+    
+  logback:
+    rollingpolicy:
+      clean-history-on-start: true
+      max-file-size: 100MB
+      max-history: 30
+      total-size-cap: 3GB
+      
+# Custom Application Configuration
+app:
+  # Kafka Topic Configuration
+  kafka:
+    topic:
+      risk-assessment-request: risk-assessment-request-events
+      risk-assessment-result: risk-assessment-result-events
+      fraud-detection-request: fraud-detection-request-events
+      fraud-detection-result: fraud-detection-result-events
+      transaction-analysis: transaction-analysis-events
+      customer-profile-update: customer-profile-update-events
+      compliance-violation: compliance-violation-events
+      
+  # Risk Assessment Configuration
+  risk:
+    # Risk Calculation Parameters
+    calculation:
+      default-score-weight: 0.6
+      transaction-history-weight: 0.25
+      credit-score-weight: 0.15
+      max-risk-score: 1000
+      min-risk-score: 100
+      
+    # Risk Thresholds
+    thresholds:
+      low-risk-max: 300
+      medium-risk-max: 700
+      high-risk-min: 701
+      
+    # Model Configuration
+    model:
+      version: v2.1.0
+      refresh-interval: 3600000
+      fallback-enabled: true
+      
+  # Fraud Detection Configuration
+  fraud:
+    detection:
+      enabled: true
+      real-time-threshold: 100
+      batch-processing-interval: 300000
+      model-accuracy-threshold: 0.95
+      
+    # Fraud Rules Configuration
+    rules:
+      velocity-check-enabled: true
+      geo-location-enabled: true
+      device-fingerprint-enabled: true
+      behavioral-analysis-enabled: true
+      
+  # Security Configuration
+  security:
+    # Rate Limiting
+    rate-limit:
+      enabled: true
+      requests-per-minute: 1000
+      burst-capacity: 200
+      
+    # Encryption Configuration
+    encryption:
+      algorithm: AES-256-GCM
+      key-rotation-interval: 2592000000
+      
+    # Audit Configuration
+    audit:
+      enabled: true
+      retention-days: 2555
+      compress-after-days: 90
+      
+  # Performance Configuration
+  performance:
+    # Connection Pool Sizes
+    database:
+      max-pool-size: 20
+      min-pool-size: 10
+      
+    # Cache Configuration
+    cache:
+      risk-assessment-ttl: 3600
+      customer-profile-ttl: 1800
+      fraud-rules-ttl: 7200
+      
+    # Async Processing
+    async:
+      core-pool-size: 10
+      max-pool-size: 50
+      queue-capacity: 100
+      thread-name-prefix: RiskAssessment-
+      
+  # Integration Configuration
+  integration:
+    # External Services
+    credit-bureau:
+      url: ${CREDIT_BUREAU_URL:https://api.creditbureau.com}
+      timeout: 30000
+      retry-attempts: 3
+      
+    identity-verification:
+      url: ${IDENTITY_VERIFICATION_URL:https://api.identityverification.com}
+      timeout: 15000
+      retry-attempts: 2
+      
+    blockchain:
+      enabled: true
+      network: ${BLOCKCHAIN_NETWORK:hyperledger-fabric}
+      channel: risk-assessment-channel
+      
+  # Monitoring and Alerting
+  monitoring:
+    # Health Check Configuration
+    health:
+      check-interval: 30000
+      failure-threshold: 3
+      
+    # Metrics Configuration
+    metrics:
+      custom-enabled: true
+      business-metrics-enabled: true
+      
+    # Alerting Configuration
+    alerts:
+      enabled: true
+      email-notifications: true
+      slack-notifications: true
+      
+# Profile-specific Configurations
+---
+spring:
+  config:
+    activate:
+      on-profile: development
+      
+logging:
+  level:
+    com.ufs.risk: DEBUG
+    org.springframework.kafka: DEBUG
+    org.springframework.data.mongodb: DEBUG
+    
+app:
+  security:
+    rate-limit:
+      requests-per-minute: 10000
+      
+---
+spring:
+  config:
+    activate:
+      on-profile: staging
+      
+logging:
+  level:
+    com.ufs.risk: INFO
+    
+app:
+  performance:
+    database:
+      max-pool-size: 30
+      
+---
+spring:
+  config:
+    activate:
+      on-profile: production
+      
+logging:
+  level:
+    root: WARN
+    com.ufs.risk: INFO
+    
+app:
+  performance:
+    database:
+      max-pool-size: 50
+      min-pool-size: 20
+    async:
+      core-pool-size: 20
+      max-pool-size: 100

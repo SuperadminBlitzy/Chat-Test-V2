@@ -1,0 +1,208 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-service
+  namespace: financial-services
+  labels:
+    app: ufs
+    component: mongodb
+    tier: database
+    version: v1
+    environment: production
+    managed-by: kubernetes
+    platform: unified-financial-services
+  annotations:
+    service.beta.kubernetes.io/aws-load-balancer-internal: "true"
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    kubernetes.io/service.health-check-grace-period-seconds: "600"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "27017"
+    prometheus.io/path: "/metrics"
+    # Financial services compliance annotations
+    compliance.financial-services/data-classification: "restricted"
+    compliance.financial-services/encryption-required: "true"
+    compliance.financial-services/audit-logging: "enabled"
+    # Service mesh annotations for Istio
+    istio.io/rev: "default"
+    sidecar.istio.io/inject: "true"
+    # Documentation and contact information
+    description: "MongoDB database service for document storage, analytics data, and customer interactions"
+    owner: "platform-engineering"
+    contact: "platform-engineering@financial-platform.com"
+    documentation: "https://docs.financial-platform.com/services/mongodb"
+spec:
+  type: ClusterIP
+  clusterIP: None  # Headless service for StatefulSet discovery
+  selector:
+    app: mongodb
+    tier: database
+    component: database-server
+  ports:
+    - name: mongo
+      protocol: TCP
+      port: 27017
+      targetPort: 27017
+      # MongoDB standard port for database connections
+    - name: mongo-metrics
+      protocol: TCP
+      port: 9216
+      targetPort: 9216
+      # MongoDB exporter metrics port for Prometheus monitoring
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  # Service topology preferences for performance optimization
+  topologyKeys:
+    - "kubernetes.io/hostname"
+    - "topology.kubernetes.io/zone"
+    - "*"
+---
+# Additional headless service for StatefulSet member discovery
+apiVersion: v1
+kind: Service
+metadata:
+  name: mongodb-headless
+  namespace: financial-services
+  labels:
+    app: ufs
+    component: mongodb
+    tier: database
+    service-type: headless
+    version: v1
+    environment: production
+    platform: unified-financial-services
+  annotations:
+    # Headless service for MongoDB replica set discovery
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    compliance.financial-services/data-classification: "restricted"
+    compliance.financial-services/purpose: "database-discovery"
+spec:
+  type: ClusterIP
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: mongodb
+    tier: database
+    component: database-server
+  ports:
+    - name: mongo
+      protocol: TCP
+      port: 27017
+      targetPort: 27017
+---
+# Service Monitor for Prometheus metrics collection
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: mongodb-service-monitor
+  namespace: financial-services
+  labels:
+    app: ufs
+    component: mongodb
+    tier: database
+    monitoring: prometheus
+    version: v1
+    environment: production
+spec:
+  selector:
+    matchLabels:
+      app: ufs
+      component: mongodb
+      tier: database
+  endpoints:
+    - port: mongo-metrics
+      interval: 30s
+      path: /metrics
+      scheme: http
+      scrapeTimeout: 10s
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'mongodb_.*'
+          targetLabel: __name__
+          replacement: '${1}'
+  namespaceSelector:
+    matchNames:
+      - financial-services
+---
+# Network Policy for MongoDB service security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: mongodb-network-policy
+  namespace: financial-services
+  labels:
+    app: ufs
+    component: mongodb
+    tier: database
+    security-policy: network-isolation
+    version: v1
+    environment: production
+  annotations:
+    compliance.financial-services/network-security: "enabled"
+    compliance.financial-services/data-protection: "network-isolation"
+spec:
+  podSelector:
+    matchLabels:
+      app: mongodb
+      tier: database
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow connections from application microservices
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: financial-services
+        - podSelector:
+            matchLabels:
+              tier: application
+      ports:
+        - protocol: TCP
+          port: 27017
+    # Allow connections from monitoring systems
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9216
+    # Allow inter-pod communication for replica set
+    - from:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+              tier: database
+      ports:
+        - protocol: TCP
+          port: 27017
+  egress:
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # Allow communication between MongoDB replica set members
+    - to:
+        - podSelector:
+            matchLabels:
+              app: mongodb
+              tier: database
+      ports:
+        - protocol: TCP
+          port: 27017
+    # Allow external connectivity for backup and replication (if needed)
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443  # HTTPS for cloud backup services
+        - protocol: TCP
+          port: 27017  # MongoDB replication to external clusters

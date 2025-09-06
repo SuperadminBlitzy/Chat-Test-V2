@@ -1,0 +1,87 @@
+# Redis Service - Provides internal endpoint for Redis instances
+# Used for caching, session storage, and real-time data in the financial services platform
+# Supports microservices architecture with high availability and scalability
+apiVersion: v1
+kind: Service
+metadata:
+  # Service name for internal DNS resolution within the cluster
+  name: redis-service
+  
+  # Namespace for financial services platform components
+  namespace: financial-services
+  
+  # Labels for service identification and management
+  labels:
+    app: redis
+    tier: cache
+    component: database
+    environment: production
+    version: "7.2"
+    managed-by: kubernetes
+    team: platform-engineering
+    
+  # Annotations for enhanced functionality and monitoring
+  annotations:
+    # Service description and purpose
+    description: "Internal Redis service for caching and session management"
+    
+    # Monitoring and observability
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "6379"
+    prometheus.io/path: "/metrics"
+    
+    # Service mesh configuration for Istio
+    service.alpha.istio.io/tolerate-unready-endpoints: "true"
+    
+    # Load balancing configuration
+    service.beta.kubernetes.io/load-balancer-source-ranges: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Documentation and operational metadata
+    docs.url: "https://docs.financial-platform.com/redis-service"
+    contact.team: "platform-engineering@financial-platform.com"
+    created-by: "infrastructure-automation"
+    last-updated: "2024-12-26"
+    
+    # Compliance and audit annotations
+    compliance.pci-dss: "enabled"
+    audit.level: "high"
+    data-classification: "internal"
+    
+spec:
+  # ClusterIP type for internal cluster communication only
+  # Provides stable internal DNS name and load balancing
+  type: ClusterIP
+  
+  # Selector to target Redis pods
+  # Must match the labels on Redis deployment/statefulset pods
+  selector:
+    app: redis
+    
+  # Session affinity for consistent routing
+  # Important for session storage to maintain session consistency
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  
+  # Port configuration for Redis service
+  ports:
+    # Standard Redis port configuration
+    - name: redis
+      protocol: TCP
+      port: 6379           # Service port (internal cluster access)
+      targetPort: 6379     # Container port on Redis pods
+      
+    # Optional: Redis Sentinel port for high availability monitoring
+    - name: sentinel
+      protocol: TCP
+      port: 26379
+      targetPort: 26379
+      
+  # IP family configuration for dual-stack support
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+    
+  # Internal traffic policy for optimized routing
+  internalTrafficPolicy: Local

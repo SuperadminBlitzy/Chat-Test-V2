@@ -1,0 +1,319 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: config-server-deployment
+  namespace: ufs
+  labels:
+    app: config-server
+    version: v1.0.0
+    component: infrastructure
+    tier: critical
+    managed-by: argocd
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    app.kubernetes.io/name: config-server
+    app.kubernetes.io/instance: config-server-deployment
+    app.kubernetes.io/version: v1.0.0
+    app.kubernetes.io/component: configuration-server
+    app.kubernetes.io/part-of: unified-financial-services
+    app.kubernetes.io/managed-by: argocd
+    # Security annotations for compliance
+    security.financial-platform.com/scan-required: "true"
+    security.financial-platform.com/pci-compliant: "true"
+    # Monitoring annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/port: "8888"
+spec:
+  replicas: 2
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      app: config-server
+      version: v1.0.0
+  template:
+    metadata:
+      labels:
+        app: config-server
+        version: v1.0.0
+        component: infrastructure
+        tier: critical
+        qos-class: burstable
+        criticality: high
+      annotations:
+        # Security annotations for pod-level controls
+        container.apparmor.security.beta.kubernetes.io/config-server: runtime/default
+        seccomp.security.alpha.kubernetes.io/pod: runtime/default
+        # Configuration checksum for automated rolling updates
+        checksum/config: "{{ configmap-checksum }}"
+        checksum/secret: "{{ secret-checksum }}"
+        # Monitoring annotations
+        prometheus.io/scrape: "true"
+        prometheus.io/path: "/actuator/prometheus"
+        prometheus.io/port: "8888"
+    spec:
+      serviceAccountName: ufs-service-account
+      automountServiceAccountToken: true
+      # Security context for the entire pod
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+        seccompProfile:
+          type: RuntimeDefault
+      # DNS configuration for service discovery
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: edns0
+      # Termination grace period for graceful shutdown
+      terminationGracePeriodSeconds: 30
+      # Priority class for critical infrastructure
+      priorityClassName: system-cluster-critical
+      # Affinity rules for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values:
+                        - config-server
+                topologyKey: kubernetes.io/hostname
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+              - matchExpressions:
+                  - key: node-role.kubernetes.io/worker
+                    operator: In
+                    values:
+                      - "true"
+                  - key: node.kubernetes.io/instance-type
+                    operator: NotIn
+                    values:
+                      - spot
+      # Tolerations for dedicated financial services nodes
+      tolerations:
+        - key: "financial-services"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+      containers:
+        - name: config-server
+          image: harbor.financial-platform.com/ufs/config-server:v1.0.0
+          imagePullPolicy: IfNotPresent
+          # Security context for the container
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          ports:
+            - name: http
+              containerPort: 8888
+              protocol: TCP
+            - name: management
+              containerPort: 8889
+              protocol: TCP
+          # Environment variables from ConfigMap and Secrets
+          envFrom:
+            - configMapRef:
+                name: ufs-configmap
+            - secretRef:
+                name: ufs-secrets
+          # Additional environment variables
+          env:
+            - name: SPRING_PROFILES_ACTIVE
+              value: "production,kubernetes"
+            - name: SPRING_CLOUD_CONFIG_SERVER_GIT_URI
+              valueFrom:
+                configMapKeyRef:
+                  name: ufs-configmap
+                  key: git.config.uri
+            - name: SPRING_CLOUD_CONFIG_SERVER_GIT_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: ufs-secrets
+                  key: git.config.username
+            - name: SPRING_CLOUD_CONFIG_SERVER_GIT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: ufs-secrets
+                  key: git.config.password
+            - name: MANAGEMENT_ENDPOINTS_WEB_EXPOSURE_INCLUDE
+              value: "health,info,metrics,prometheus"
+            - name: MANAGEMENT_ENDPOINT_HEALTH_SHOW_DETAILS
+              value: "always"
+            - name: MANAGEMENT_HEALTH_READINESS_STATE_ENABLED
+              value: "true"
+            - name: MANAGEMENT_HEALTH_LIVENESS_STATE_ENABLED
+              value: "true"
+            - name: LOGGING_LEVEL_ROOT
+              value: "INFO"
+            - name: LOGGING_LEVEL_ORG_SPRINGFRAMEWORK_CLOUD_CONFIG
+              value: "DEBUG"
+            # JVM configuration for optimal performance
+            - name: JAVA_OPTS
+              value: "-Xms512m -Xmx1g -XX:+UseG1GC -XX:+UseContainerSupport -XX:MaxRAMPercentage=75.0 -Djava.security.egd=file:/dev/./urandom"
+            # Kubernetes-specific configuration
+            - name: KUBERNETES_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: KUBERNETES_POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: KUBERNETES_POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+          # Resource allocation for guaranteed performance
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+              ephemeral-storage: "1Gi"
+            limits:
+              cpu: "500m"
+              memory: "1Gi"
+              ephemeral-storage: "2Gi"
+          # Volume mounts for configuration and temporary files
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+            - name: config-cache
+              mountPath: /app/config-cache
+            - name: logs-volume
+              mountPath: /app/logs
+          # Liveness probe for container health
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8888
+              scheme: HTTP
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          # Readiness probe for traffic routing
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8888
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+            successThreshold: 2
+          # Startup probe for slow-starting applications
+          startupProbe:
+            httpGet:
+              path: /actuator/health
+              port: 8888
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 5
+            timeoutSeconds: 3
+            failureThreshold: 30
+            successThreshold: 1
+          # Lifecycle hooks for graceful shutdown
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "sleep 10"
+      # Volumes for temporary storage and configuration
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            sizeLimit: "100Mi"
+        - name: config-cache
+          emptyDir:
+            sizeLimit: "500Mi"
+        - name: logs-volume
+          emptyDir:
+            sizeLimit: "1Gi"
+      # Image pull secrets for private registry access
+      imagePullSecrets:
+        - name: harbor-registry-secret
+      # Restart policy
+      restartPolicy: Always
+---
+# Pod Disruption Budget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: config-server-pdb
+  namespace: ufs
+  labels:
+    app: config-server
+    component: infrastructure
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: config-server
+      version: v1.0.0
+---
+# Horizontal Pod Autoscaler for dynamic scaling
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: config-server-hpa
+  namespace: ufs
+  labels:
+    app: config-server
+    component: infrastructure
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: config-server-deployment
+  minReplicas: 2
+  maxReplicas: 5
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Percent
+          value: 50
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 600
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60

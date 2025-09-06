@@ -1,0 +1,592 @@
+# Kubernetes Ingress Configuration for Unified Financial Services Platform
+# This ingress resource manages external access to backend services through Kong Gateway
+# providing centralized security, TLS termination, and traffic management for financial services
+# 
+# Requirements addressed:
+# - API Gateway Management: Centralized entry point for all external traffic
+# - Security Compliance: TLS termination, certificate management, security headers
+# - Horizontal Scalability: Kong Gateway cluster with load balancing
+# - External Integration Points: Secure access for Core Banking Systems and Payment Networks
+#
+# Technology Stack: Kong Gateway 3.4+, Kubernetes 1.28+, Istio Service Mesh, cert-manager
+# Performance Target: 50,000+ TPS, <1 second response time, 99.99% uptime
+# Security Compliance: SOC2, PCI-DSS, GDPR, Basel III/IV requirements
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ufs-ingress
+  namespace: ufs
+  labels:
+    app.kubernetes.io/name: ufs-ingress
+    app.kubernetes.io/component: ingress
+    app.kubernetes.io/part-of: financial-services-platform
+    app.kubernetes.io/managed-by: kubernetes
+    app.kubernetes.io/version: "1.0.0"
+    # Financial services specific labels
+    platform: financial-services
+    tier: infrastructure
+    environment: production
+    criticality: critical
+    # Compliance and security labels
+    compliance.financial-services/pci-dss: "true"
+    compliance.financial-services/sox: "true"
+    compliance.financial-services/gdpr: "true"
+    security.financial-services/tls-required: "true"
+    # Traffic management labels
+    traffic.financial-services/gateway: kong
+    traffic.financial-services/mesh: istio
+  annotations:
+    # Kong Gateway configuration
+    kubernetes.io/ingress.class: "kong"
+    
+    # Kong-specific annotations for advanced traffic management
+    konghq.com/strip-path: "true"
+    konghq.com/preserve-host: "true"
+    konghq.com/protocols: "http,https"
+    
+    # Kong plugins for financial services requirements
+    konghq.com/plugins: "rate-limiting,cors,request-size-limiting,response-transformer,ip-restriction,bot-detection,request-transformer,prometheus"
+    
+    # Rate limiting configuration for financial services
+    konghq.com/override: |
+      rate-limiting:
+        minute: 10000
+        hour: 600000
+        policy: redis
+        redis_host: redis-cluster.ufs.svc.cluster.local
+        redis_port: 6379
+        redis_timeout: 2000
+        hide_client_headers: false
+        fault_tolerant: true
+    
+    # CORS configuration for web applications
+    konghq.com/cors-origins: "https://app.ufs.com,https://admin.ufs.com,https://portal.ufs.com"
+    konghq.com/cors-methods: "GET,POST,PUT,DELETE,OPTIONS,PATCH"
+    konghq.com/cors-headers: "Accept,Accept-Version,Content-Length,Content-MD5,Content-Type,Date,Authorization,X-API-Key,X-Request-ID,X-Correlation-ID"
+    konghq.com/cors-exposed-headers: "X-Auth-Token,X-Request-ID,X-Correlation-ID,X-RateLimit-Limit,X-RateLimit-Remaining"
+    konghq.com/cors-max-age: "3600"
+    konghq.com/cors-credentials: "true"
+    
+    # Request size limiting for security
+    konghq.com/request-size-limit: "10m"
+    
+    # IP restriction for enhanced security (financial networks only)
+    konghq.com/whitelist: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Response transformer for security headers
+    konghq.com/response-transformer-add-headers: |
+      X-Content-Type-Options: nosniff
+      X-Frame-Options: DENY
+      X-XSS-Protection: 1; mode=block
+      Strict-Transport-Security: max-age=31536000; includeSubDomains; preload
+      Content-Security-Policy: default-src 'self'; script-src 'self' 'unsafe-inline' 'unsafe-eval'; style-src 'self' 'unsafe-inline'
+      Referrer-Policy: strict-origin-when-cross-origin
+      Permissions-Policy: camera=(), microphone=(), geolocation=(), payment=()
+    
+    # Request transformer for correlation tracking
+    konghq.com/request-transformer-add-headers: |
+      X-Request-ID: {{ .request_id }}
+      X-Forwarded-Proto: https
+      X-Real-IP: {{ .client_ip }}
+    
+    # TLS certificate management with cert-manager
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    cert-manager.io/acme-challenge-type: "http01"
+    
+    # Istio service mesh integration
+    sidecar.istio.io/inject: "true"
+    networking.istio.io/exportTo: "*"
+    
+    # Financial services specific annotations
+    financial-services.platform/sla-tier: "platinum"
+    financial-services.platform/rto: "15min"
+    financial-services.platform/rpo: "5min"
+    financial-services.platform/uptime-requirement: "99.99"
+    
+    # Circuit breaker configuration
+    circuit-breaker.financial-services/failure-threshold: "5"
+    circuit-breaker.financial-services/recovery-timeout: "30s"
+    circuit-breaker.financial-services/window-size: "60s"
+    
+    # Monitoring and observability
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
+    
+    # Security and audit annotations
+    security.financial-services/encrypted-in-transit: "true"
+    security.financial-services/pci-compliant: "true"
+    audit.financial-services/log-level: "detailed"
+    audit.financial-services/retention-period: "7years"
+    
+    # Load balancer configuration
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTP"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/ssl-protocols: "TLSv1.2 TLSv1.3"
+    nginx.ingress.kubernetes.io/ssl-ciphers: "ECDHE-RSA-AES128-GCM-SHA256,ECDHE-RSA-AES256-GCM-SHA384,ECDHE-RSA-AES128-SHA256,ECDHE-RSA-AES256-SHA384"
+    
+    # Performance optimization
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "30" 
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "30"
+    nginx.ingress.kubernetes.io/proxy-buffer-size: "8k"
+    nginx.ingress.kubernetes.io/proxy-buffers-number: "8"
+    
+    # Additional security headers
+    nginx.ingress.kubernetes.io/configuration-snippet: |
+      more_set_headers "X-Content-Type-Options: nosniff";
+      more_set_headers "X-Frame-Options: DENY";
+      more_set_headers "X-XSS-Protection: 1; mode=block";
+      more_set_headers "Strict-Transport-Security: max-age=31536000; includeSubDomains; preload";
+      more_set_headers "Content-Security-Policy: default-src 'self'";
+      more_set_headers "Referrer-Policy: strict-origin-when-cross-origin";
+
+spec:
+  # Ingress class specification for Kong Gateway
+  ingressClassName: kong
+  
+  # TLS configuration for HTTPS termination
+  tls:
+    - hosts:
+        - api.ufs.com
+        - admin.ufs.com
+        - portal.ufs.com
+      secretName: ufs-tls-secret
+    - hosts:
+        - api-staging.ufs.com
+      secretName: ufs-staging-tls-secret
+    - hosts:
+        - api-dev.ufs.com
+      secretName: ufs-dev-tls-secret
+  
+  # Routing rules for different environments and services
+  rules:
+    # Production API endpoint
+    - host: api.ufs.com
+      http:
+        paths:
+          # Authentication and authorization services
+          - path: /auth
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Customer management services
+          - path: /customers
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Transaction processing services  
+          - path: /transactions
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Risk management and assessment services
+          - path: /risk
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Regulatory compliance services
+          - path: /compliance
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Analytics and reporting services
+          - path: /analytics
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Financial wellness services
+          - path: /wellness
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Blockchain and settlement services
+          - path: /blockchain
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Notification and communication services
+          - path: /notifications
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # AI/ML services for financial insights
+          - path: /ai
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Payment processing services
+          - path: /payments
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Market data and external integrations
+          - path: /market-data
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Health check endpoint
+          - path: /health
+            pathType: Exact
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # Metrics endpoint for monitoring
+          - path: /metrics
+            pathType: Exact
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+          
+          # API documentation
+          - path: /docs
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+    
+    # Administrative interface
+    - host: admin.ufs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+    
+    # Developer portal
+    - host: portal.ufs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 80
+    
+    # Staging environment
+    - host: api-staging.ufs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway-staging
+                port:
+                  number: 80
+    
+    # Development environment
+    - host: api-dev.ufs.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway-dev
+                port:
+                  number: 80
+
+---
+# Kong Ingress resource for additional Kong-specific configuration
+# Provides advanced Kong Gateway features not available in standard Kubernetes Ingress
+apiVersion: configuration.konghq.com/v1
+kind: KongIngress
+metadata:
+  name: ufs-kong-ingress
+  namespace: ufs
+  labels:
+    app.kubernetes.io/name: ufs-kong-ingress
+    app.kubernetes.io/component: gateway-config
+    app.kubernetes.io/part-of: financial-services-platform
+  annotations:
+    kubernetes.io/description: "Kong-specific configuration for advanced gateway features"
+    
+# Upstream configuration for backend services
+upstream:
+  # Connection pooling for high-performance financial transactions
+  slots: 1000
+  healthchecks:
+    # Active health checks
+    active:
+      http_path: "/health"
+      healthy:
+        interval: 10
+        successes: 3
+      unhealthy:
+        interval: 10
+        http_failures: 5
+        tcp_failures: 3
+        timeouts: 3
+    # Passive health checks
+    passive:
+      healthy:
+        successes: 3
+      unhealthy:
+        http_failures: 5
+        tcp_failures: 3
+        timeouts: 3
+  # Hash-based load balancing for session affinity
+  hash_on: "header"
+  hash_on_header: "X-Session-ID"
+  hash_fallback: "ip"
+
+# Proxy configuration for optimal performance
+proxy:
+  # Connection settings optimized for financial services
+  connect_timeout: 30000
+  read_timeout: 30000
+  write_timeout: 30000
+  
+  # Buffer settings for high-throughput scenarios
+  proxy_buffering: "on"
+  proxy_buffer_size: "8k"
+  proxy_buffers: "8 8k"
+  
+  # Protocol settings
+  protocol: "http"
+  
+  # Retry configuration for resilience
+  retries: 3
+  
+  # Headers configuration
+  headers:
+    # Remove server headers for security
+    - "Server:"
+    - "X-Powered-By:"
+  
+# Route-specific configuration
+route:
+  # Method restrictions for security
+  methods:
+    - "GET"
+    - "POST"
+    - "PUT"
+    - "DELETE"
+    - "PATCH"
+    - "OPTIONS"
+  
+  # Protocol enforcement
+  protocols:
+    - "https"
+  
+  # Regular expression support for advanced routing
+  regex_priority: 10
+  
+  # Path handling
+  strip_path: true
+  preserve_host: true
+
+---
+# NetworkPolicy for Ingress security
+# Restricts network traffic to and from the ingress controller
+# following financial services security best practices
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ufs-ingress-netpol
+  namespace: ufs
+  labels:
+    app.kubernetes.io/name: ufs-ingress-netpol
+    app.kubernetes.io/component: security
+    app.kubernetes.io/part-of: financial-services-platform
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: kong-gateway
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  # Ingress rules - external traffic allowed on HTTPS
+  ingress:
+    # Allow HTTPS traffic from external load balancer
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    
+    # Allow traffic from Istio sidecar proxy
+    - from:
+        - podSelector:
+            matchLabels:
+              app: istio-proxy
+      ports:
+        - protocol: TCP
+          port: 15001
+        - protocol: TCP
+          port: 15006
+  
+  # Egress rules - what the ingress can connect to
+  egress:
+    # Allow connection to API Gateway service
+    - to:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+      ports:
+        - protocol: TCP
+          port: 80
+        - protocol: TCP
+          port: 8080
+    
+    # Allow connection to cert-manager for certificate validation
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: cert-manager
+      ports:
+        - protocol: TCP
+          port: 9402
+    
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    
+    # Allow connection to Redis for rate limiting
+    - to:
+        - podSelector:
+            matchLabels:
+              app: redis
+      ports:
+        - protocol: TCP
+          port: 6379
+    
+    # Allow connection to monitoring services
+    - to:
+        - podSelector:
+            matchLabels:
+              app: prometheus
+      ports:
+        - protocol: TCP
+          port: 9090
+
+---
+# Service Monitor for Prometheus monitoring
+# Configures Prometheus to collect metrics from the Kong Gateway
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ufs-ingress-monitor
+  namespace: ufs
+  labels:
+    app.kubernetes.io/name: ufs-ingress-monitor
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: financial-services-platform
+    prometheus: financial-services
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: kong-gateway
+  
+  endpoints:
+    - port: metrics
+      interval: 15s
+      path: /metrics
+      scheme: http
+      honorLabels: true
+      
+      # Relabeling for financial services context
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service_name
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: namespace
+        - sourceLabels: [__meta_kubernetes_service_label_environment]
+          targetLabel: environment
+        - sourceLabels: [__address__]
+          targetLabel: __param_target
+        - sourceLabels: [__param_target]
+          targetLabel: instance
+        - targetLabel: __address__
+          replacement: kong-gateway-prometheus-exporter:9542
+      
+      # Metric relabeling for financial services metrics
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'kong_.*'
+          targetLabel: gateway_type
+          replacement: 'kong'
+        - sourceLabels: [service]
+          regex: '(.*)'
+          targetLabel: financial_service
+          replacement: '${1}'
+        - sourceLabels: [route]
+          regex: '(.*)'
+          targetLabel: api_route
+          replacement: '${1}'
+  
+  # Namespace selector
+  namespaceSelector:
+    matchNames:
+      - ufs

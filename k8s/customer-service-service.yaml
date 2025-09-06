@@ -1,0 +1,158 @@
+# Kubernetes Service for customer-service
+# This service exposes the customer-service pods within the cluster
+# Enables service discovery and load balancing for microservices communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: customer-service
+  namespace: financial-services
+  labels:
+    # Application identification
+    app: customer-service
+    app.kubernetes.io/name: customer-service
+    app.kubernetes.io/instance: customer-service
+    app.kubernetes.io/version: "1.0.0"
+    app.kubernetes.io/component: microservice
+    app.kubernetes.io/part-of: financial-platform
+    app.kubernetes.io/managed-by: argocd
+    
+    # Business domain classification
+    domain: customer-management
+    tier: backend
+    service-type: api
+    
+    # Operational labels for monitoring and governance
+    environment: production
+    criticality: high
+    qos-class: guaranteed
+    
+    # Financial services specific labels
+    compliance-level: high
+    data-classification: pii
+    regulatory-scope: sox-compliant
+    
+    # Monitoring and observability labels
+    monitoring: enabled
+    metrics: prometheus
+    logging: enabled
+    tracing: enabled
+    
+  annotations:
+    # Service discovery annotations
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+    
+    # Prometheus monitoring annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
+    
+    # ArgoCD deployment annotations
+    argocd.argoproj.io/sync-wave: "2"
+    argocd.argoproj.io/compare-options: "IgnoreExtraneous"
+    
+    # Documentation and metadata
+    description: "Customer service for financial platform - handles customer profile management, KYC, and onboarding"
+    owner: "platform-team"
+    contact: "platform-team@financial-platform.com"
+    
+    # Networking and load balancing annotations
+    service.beta.kubernetes.io/aws-load-balancer-type: "nlb"
+    service.beta.kubernetes.io/aws-load-balancer-backend-protocol: "http"
+    service.beta.kubernetes.io/aws-load-balancer-healthy-threshold: "2"
+    service.beta.kubernetes.io/aws-load-balancer-unhealthy-threshold: "3"
+    
+    # Security annotations
+    security.io/tls-enabled: "true"
+    security.io/authentication-required: "true"
+    security.io/authorization-enabled: "true"
+    
+    # Compliance and audit annotations
+    compliance.io/sox-compliant: "true"
+    compliance.io/pci-dss-applicable: "true"
+    compliance.io/gdpr-compliant: "true"
+    audit.io/logging-enabled: "true"
+    
+    # Performance and SLA annotations
+    sla.io/availability-target: "99.99"
+    sla.io/response-time-target: "100ms"
+    sla.io/throughput-target: "10000rps"
+    
+    # Cost management annotations
+    cost.io/budget-owner: "customer-domain"
+    cost.io/cost-center: "financial-services"
+    cost.io/environment: "production"
+    
+    # Change management annotations
+    change.io/created-by: "platform-team"
+    change.io/creation-date: "2024-01-15"
+    change.io/last-modified: "2024-01-15"
+    change.io/version: "1.0.0"
+
+spec:
+  # Service type - ClusterIP for internal communication
+  type: ClusterIP
+  
+  # Cluster IP allocation strategy
+  # Using None for headless service if needed for direct pod access
+  # clusterIP: None  # Uncomment for headless service
+  
+  # IP family configuration for dual-stack support
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  
+  # Session affinity for stateful interactions if needed
+  sessionAffinity: None
+  # sessionAffinityConfig:
+  #   clientIP:
+  #     timeoutSeconds: 10800  # 3 hours
+  
+  # Selector to match customer-service pods
+  selector:
+    app: customer-service
+    app.kubernetes.io/name: customer-service
+  
+  # Port configuration
+  ports:
+    # Main HTTP port for API endpoints
+    - name: http
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      # Optional: specify different port for service vs container
+      # targetPort: http  # if container has named port
+    
+    # Health check port (if different from main port)
+    - name: health
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+    
+    # Metrics port for Prometheus scraping
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+    
+    # Management port for actuator endpoints
+    - name: management
+      protocol: TCP
+      port: 8082
+      targetPort: 8082
+  
+  # External traffic policy for LoadBalancer/NodePort services
+  # externalTrafficPolicy: Local  # Uncomment if using LoadBalancer
+  
+  # Publish not ready addresses for debugging
+  publishNotReadyAddresses: false
+  
+  # Load balancer configuration (if using LoadBalancer type)
+  # loadBalancerClass: "aws-load-balancer-controller"
+  # loadBalancerSourceRanges:
+  #   - "10.0.0.0/8"
+  #   - "172.16.0.0/12"
+  #   - "192.168.0.0/16"
+  
+  # Allocate load balancer node ports in a specific range
+  # allocateLoadBalancerNodePorts: true

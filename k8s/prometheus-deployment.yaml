@@ -1,0 +1,662 @@
+# Prometheus Deployment for Unified Financial Services Platform
+# This deployment provides comprehensive monitoring and alerting capabilities
+# for the financial services microservices architecture with enterprise-grade
+# security, performance, and compliance features
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus-deployment
+  namespace: monitoring
+  labels:
+    # Core application labels
+    app: prometheus
+    app.kubernetes.io/name: prometheus
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: observability-stack
+    app.kubernetes.io/managed-by: argocd
+    app.kubernetes.io/version: "2.48.0"
+    app.kubernetes.io/instance: prometheus-server
+    
+    # Platform-specific labels
+    platform: unified-financial-services
+    tier: monitoring
+    environment: production
+    criticality: high
+    
+    # Financial services specific labels
+    financial-platform/service-type: monitoring
+    financial-platform/compliance: "true"
+    financial-platform/audit-required: "true"
+    financial-platform/data-classification: confidential
+    
+    # Cost and resource management
+    cost-center: monitoring-infrastructure
+    billing-team: platform-engineering
+    resource-pool: observability
+    
+    # Monitoring and observability metadata
+    monitoring.coreos.com/scrape: "true"
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/metrics"
+    
+    # Compliance and security
+    compliance/sox: "true"
+    compliance/pci-dss: "true"
+    compliance/gdpr: "true"
+    security.kubernetes.io/enforce-psp: "true"
+    
+  annotations:
+    # Deployment metadata and documentation
+    kubernetes.io/description: "Prometheus monitoring server deployment for comprehensive metrics collection, storage, and alerting across the Unified Financial Services Platform"
+    
+    # Contact and ownership information
+    contact.platform/owner: "platform-engineering@financial-platform.com"
+    contact.platform/team: "Observability Team"
+    contact.platform/slack: "#observability"
+    contact.platform/on-call: "observability-oncall@financial-platform.com"
+    
+    # Deployment strategy and configuration
+    deployment.kubernetes.io/revision: "1"
+    deployment.financial-platform/strategy: "rolling-update"
+    deployment.financial-platform/max-unavailable: "0"
+    deployment.financial-platform/max-surge: "1"
+    
+    # Performance and scaling configuration
+    autoscaling.kubernetes.io/target-cpu-utilization: "70"
+    autoscaling.kubernetes.io/target-memory-utilization: "80"
+    autoscaling.kubernetes.io/min-replicas: "1"
+    autoscaling.kubernetes.io/max-replicas: "3"
+    
+    # Monitoring and SLA configuration
+    monitoring.financial-platform/sla-target: "99.9"
+    monitoring.financial-platform/response-time-sla: "5000ms"
+    monitoring.financial-platform/alert-severity: "critical"
+    
+    # Data retention and compliance
+    data-retention.financial-platform/metrics-retention: "90days"
+    data-retention.financial-platform/alert-history: "1year"
+    compliance.financial-platform/audit-retention-period: "7years"
+    
+    # Security and access control
+    security.financial-platform/network-policy: "monitoring-network-policy"
+    security.financial-platform/pod-security-policy: "monitoring-psp"
+    security.financial-platform/service-account: "prometheus-sa"
+    
+    # Backup and disaster recovery
+    backup.financial-platform/enabled: "true"
+    backup.financial-platform/schedule: "0 2 * * *"
+    backup.financial-platform/retention: "30days"
+    disaster-recovery.financial-platform/rpo: "15minutes"
+    disaster-recovery.financial-platform/rto: "5minutes"
+    
+    # Integration and connectivity
+    integration.financial-platform/service-discovery: "kubernetes"
+    integration.financial-platform/alert-manager: "enabled"
+    integration.financial-platform/grafana: "enabled"
+    integration.financial-platform/jaeger: "enabled"
+    
+    # Configuration management
+    config.financial-platform/configmap: "prometheus-config"
+    config.financial-platform/secrets: "prometheus-secrets"
+    config.financial-platform/storage: "prometheus-pvc"
+    
+    # Documentation and support links
+    documentation.financial-platform/runbook: "https://docs.financial-platform.com/observability/prometheus/runbook"
+    documentation.financial-platform/architecture: "https://docs.financial-platform.com/observability/prometheus/architecture"
+    documentation.financial-platform/troubleshooting: "https://docs.financial-platform.com/observability/prometheus/troubleshooting"
+    documentation.financial-platform/dashboards: "https://grafana.financial-platform.com/dashboards/prometheus"
+
+spec:
+  # Deployment configuration
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+  
+  # Revision history for rollbacks
+  revisionHistoryLimit: 10
+  
+  # Progress deadline to prevent stuck deployments
+  progressDeadlineSeconds: 600
+  
+  # Pod selection criteria
+  selector:
+    matchLabels:
+      app: prometheus
+      app.kubernetes.io/name: prometheus
+      app.kubernetes.io/instance: prometheus-server
+  
+  # Pod template specification
+  template:
+    metadata:
+      labels:
+        # Core application labels
+        app: prometheus
+        app.kubernetes.io/name: prometheus
+        app.kubernetes.io/component: monitoring
+        app.kubernetes.io/part-of: observability-stack
+        app.kubernetes.io/managed-by: argocd
+        app.kubernetes.io/version: "2.48.0"
+        app.kubernetes.io/instance: prometheus-server
+        
+        # Platform-specific labels
+        platform: unified-financial-services
+        tier: monitoring
+        environment: production
+        criticality: high
+        
+        # Financial services specific labels
+        financial-platform/service-type: monitoring
+        financial-platform/compliance: "true"
+        financial-platform/audit-required: "true"
+        
+        # Monitoring labels
+        monitoring.coreos.com/scrape: "true"
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        
+        # Security and compliance
+        security.kubernetes.io/enforce-psp: "true"
+        compliance/sox: "true"
+        compliance/pci-dss: "true"
+        compliance/gdpr: "true"
+        
+        # Service mesh integration
+        service-mesh.istio.io/inject: "false"
+        
+        # Network policy labels
+        network-policy.kubernetes.io/ingress: "monitoring-ingress"
+        network-policy.kubernetes.io/egress: "monitoring-egress"
+        
+      annotations:
+        # Pod-specific annotations
+        kubernetes.io/description: "Prometheus monitoring server pod for metrics collection and alerting"
+        
+        # Security context annotations
+        container.apparmor.security.beta.kubernetes.io/prometheus: "runtime/default"
+        seccomp.security.alpha.kubernetes.io/pod: "runtime/default"
+        
+        # Resource and performance annotations
+        resources.financial-platform/cpu-request: "500m"
+        resources.financial-platform/memory-request: "2Gi"
+        resources.financial-platform/cpu-limit: "2"
+        resources.financial-platform/memory-limit: "4Gi"
+        
+        # Monitoring and alerting configuration
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9090"
+        prometheus.io/path: "/metrics"
+        prometheus.io/scheme: "http"
+        prometheus.io/interval: "30s"
+        prometheus.io/timeout: "10s"
+        
+        # Data retention and storage
+        storage.financial-platform/retention-time: "90d"
+        storage.financial-platform/retention-size: "500GB"
+        storage.financial-platform/wal-compression: "true"
+        
+        # Configuration and secrets
+        config.financial-platform/config-hash: "prometheus-config-hash"
+        config.financial-platform/reload-enabled: "true"
+        
+        # Compliance and audit
+        audit.financial-platform/log-level: "info"
+        audit.financial-platform/metrics-audit: "enabled"
+        compliance.financial-platform/encryption-at-rest: "true"
+        
+        # Backup and snapshot configuration
+        backup.financial-platform/snapshot-enabled: "true"
+        backup.financial-platform/snapshot-schedule: "0 */6 * * *"
+        backup.financial-platform/snapshot-retention: "7days"
+        
+        # Service discovery and federation
+        federation.prometheus.io/enabled: "true"
+        federation.prometheus.io/external-url: "https://prometheus.financial-platform.com"
+        
+        # Alert routing and notification
+        alerting.financial-platform/alert-manager-url: "http://alertmanager:9093"
+        alerting.financial-platform/notification-channels: "slack,email,pagerduty"
+        
+        # Performance tuning
+        performance.financial-platform/query-timeout: "2m"
+        performance.financial-platform/query-concurrency: "20"
+        performance.financial-platform/query-lookback-delta: "5m"
+        
+        # Integration annotations
+        integration.financial-platform/grafana-datasource: "prometheus-datasource"
+        integration.financial-platform/jaeger-integration: "enabled"
+        integration.financial-platform/elasticsearch-integration: "enabled"
+        
+    spec:
+      # Security context for the pod
+      securityContext:
+        # Run as non-root user for security
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        fsGroupChangePolicy: "OnRootMismatch"
+        
+        # Additional security constraints
+        seccompProfile:
+          type: RuntimeDefault
+        supplementalGroups: [1000]
+        
+        # Set appropriate sysctls for performance
+        sysctls:
+          - name: net.core.somaxconn
+            value: "65535"
+          - name: net.ipv4.tcp_keepalive_time
+            value: "600"
+            
+      # Service account with appropriate RBAC permissions
+      serviceAccountName: prometheus-sa
+      
+      # Automatic service account token mounting
+      automountServiceAccountToken: true
+      
+      # DNS configuration for service discovery
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+          - name: ndots
+            value: "2"
+          - name: edns0
+            
+      # Pod disruption budget considerations
+      # Note: PDB should be created separately
+      
+      # Node selection and scheduling
+      nodeSelector:
+        kubernetes.io/os: linux
+        node-role.kubernetes.io/worker: "true"
+        workload-type: monitoring
+        
+      # Tolerations for monitoring workloads
+      tolerations:
+        - key: "monitoring"
+          operator: "Equal"
+          value: "true"
+          effect: "NoSchedule"
+        - key: "node.kubernetes.io/not-ready"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+        - key: "node.kubernetes.io/unreachable"
+          operator: "Exists"
+          effect: "NoExecute"
+          tolerationSeconds: 300
+          
+      # Affinity rules for high availability
+      affinity:
+        # Pod anti-affinity to avoid single point of failure
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app
+                      operator: In
+                      values: ["prometheus"]
+                topologyKey: kubernetes.io/hostname
+                
+        # Node affinity for monitoring nodes
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-type
+                    operator: In
+                    values: ["monitoring", "observability"]
+                    
+      # Priority class for critical monitoring workloads
+      priorityClassName: monitoring-critical
+      
+      # Termination grace period
+      terminationGracePeriodSeconds: 300
+      
+      # Restart policy
+      restartPolicy: Always
+      
+      # Init containers for setup and validation
+      initContainers:
+        - name: prometheus-config-validator
+          # prom/prometheus v2.48.0 - Official Prometheus Docker image
+          image: prom/prometheus:v2.48.0
+          imagePullPolicy: IfNotPresent
+          
+          # Security context for init container
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+            seccompProfile:
+              type: RuntimeDefault
+              
+          # Validate configuration before starting main container
+          command:
+            - /bin/prometheus
+            - --config.file=/etc/prometheus/prometheus.yml
+            - --dry-run
+            
+          # Volume mounts for configuration validation
+          volumeMounts:
+            - name: prometheus-config-volume
+              mountPath: /etc/prometheus/
+              readOnly: true
+              
+          # Resource limits for init container
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+              
+        - name: prometheus-data-permissions
+          image: busybox:1.36
+          imagePullPolicy: IfNotPresent
+          
+          # Security context for permissions init container
+          securityContext:
+            runAsUser: 0  # Need root to change permissions
+            runAsGroup: 0
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - CHOWN
+                - FOWNER
+            seccompProfile:
+              type: RuntimeDefault
+              
+          # Set appropriate permissions on data directory
+          command:
+            - /bin/sh
+            - -c
+            - |
+              chown -R 1000:1000 /prometheus/
+              chmod -R 755 /prometheus/
+              ls -la /prometheus/
+              
+          # Volume mounts for data directory
+          volumeMounts:
+            - name: prometheus-storage-volume
+              mountPath: /prometheus/
+              
+          # Resource limits for init container
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 100m
+              memory: 128Mi
+              
+      # Main application containers
+      containers:
+        - name: prometheus
+          # prom/prometheus v2.48.0 - Official Prometheus Docker image
+          image: prom/prometheus:v2.48.0
+          imagePullPolicy: IfNotPresent
+          
+          # Prometheus server command line arguments
+          args:
+            # Configuration file location
+            - --config.file=/etc/prometheus/prometheus.yml
+            
+            # Data storage configuration
+            - --storage.tsdb.path=/prometheus/
+            - --storage.tsdb.retention.time=90d
+            - --storage.tsdb.retention.size=500GB
+            - --storage.tsdb.wal-compression
+            
+            # Web console configuration
+            - --web.console.libraries=/usr/share/prometheus/console_libraries
+            - --web.console.templates=/usr/share/prometheus/consoles
+            - --web.enable-lifecycle
+            - --web.enable-admin-api
+            - --web.external-url=https://prometheus.financial-platform.com
+            - --web.route-prefix=/
+            
+            # Query engine configuration
+            - --query.timeout=2m
+            - --query.max-concurrency=20
+            - --query.lookback-delta=5m
+            - --query.max-samples=50000000
+            
+            # Rule evaluation configuration
+            - --rules.alert.for-outage-tolerance=1h
+            - --rules.alert.for-grace-period=10m
+            - --rules.alert.resend-delay=1m
+            
+            # Alertmanager configuration
+            - --alertmanager.notification-queue-capacity=10000
+            - --alertmanager.timeout=10s
+            
+            # Features and experimental options
+            - --enable-feature=agent
+            - --enable-feature=exemplar-storage
+            - --enable-feature=expand-external-labels
+            - --enable-feature=memory-snapshot-on-shutdown
+            - --enable-feature=new-service-discovery-manager
+            
+            # Logging configuration
+            - --log.level=info
+            - --log.format=json
+            
+          # Container ports
+          ports:
+            - name: http
+              containerPort: 9090
+              protocol: TCP
+              
+          # Environment variables
+          env:
+            # Prometheus-specific environment variables
+            - name: PROMETHEUS_EXTERNAL_URL
+              value: "https://prometheus.financial-platform.com"
+            - name: PROMETHEUS_CONFIG_FILE
+              value: "/etc/prometheus/prometheus.yml"
+            - name: PROMETHEUS_STORAGE_PATH
+              value: "/prometheus/"
+            - name: PROMETHEUS_WEB_LISTEN_ADDRESS
+              value: "0.0.0.0:9090"
+              
+            # Security and compliance environment variables
+            - name: GOMAXPROCS
+              value: "2"
+            - name: GOMEMLIMIT
+              value: "3GiB"
+            - name: GODEBUG
+              value: "madvdontneed=1"
+              
+            # Financial platform specific variables
+            - name: FINANCIAL_PLATFORM_ENVIRONMENT
+              value: "production"
+            - name: COMPLIANCE_MODE
+              value: "enabled"
+            - name: AUDIT_LOGGING
+              value: "enabled"
+              
+            # Kubernetes-specific environment variables
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: POD_IP
+              valueFrom:
+                fieldRef:
+                  fieldPath: status.podIP
+            - name: NODE_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: spec.nodeName
+                  
+          # Resource requirements
+          resources:
+            requests:
+              # CPU request for baseline performance
+              cpu: 500m
+              # Memory request for metrics storage and processing
+              memory: 2Gi
+              # Ephemeral storage for temporary files
+              ephemeral-storage: 1Gi
+            limits:
+              # CPU limit to prevent resource starvation
+              cpu: 2
+              # Memory limit with buffer for metric spikes
+              memory: 4Gi
+              # Ephemeral storage limit
+              ephemeral-storage: 2Gi
+              
+          # Security context for container
+          securityContext:
+            # Run as non-root user
+            runAsNonRoot: true
+            runAsUser: 1000
+            runAsGroup: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            
+            # Linux capabilities
+            capabilities:
+              drop:
+                - ALL
+              add:
+                - NET_BIND_SERVICE
+                
+            # Security profiles
+            seccompProfile:
+              type: RuntimeDefault
+              
+          # Volume mounts
+          volumeMounts:
+            # Configuration volume (read-only)
+            - name: prometheus-config-volume
+              mountPath: /etc/prometheus/
+              readOnly: true
+              
+            # Data storage volume (read-write)
+            - name: prometheus-storage-volume
+              mountPath: /prometheus/
+              
+            # Temporary directory for runtime files
+            - name: prometheus-tmp-volume
+              mountPath: /tmp/
+              
+            # Additional rule files volume
+            - name: prometheus-rules-volume
+              mountPath: /etc/prometheus/rules/
+              readOnly: true
+              
+          # Liveness probe to detect unhealthy container
+          livenessProbe:
+            httpGet:
+              path: /-/healthy
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+            
+          # Readiness probe to detect when container is ready
+          readinessProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 30
+            successThreshold: 1
+            failureThreshold: 3
+            
+          # Startup probe for slow-starting containers
+          startupProbe:
+            httpGet:
+              path: /-/ready
+              port: http
+              scheme: HTTP
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            successThreshold: 1
+            failureThreshold: 30
+            
+          # Lifecycle hooks
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - /bin/sh
+                  - -c
+                  - |
+                    # Graceful shutdown sequence
+                    echo "Initiating graceful shutdown..."
+                    
+                    # Signal Prometheus to stop accepting new requests
+                    curl -X POST http://localhost:9090/-/quit || true
+                    
+                    # Wait for ongoing queries to complete
+                    sleep 10
+                    
+                    # Force shutdown if still running
+                    pkill -TERM prometheus || true
+                    
+                    echo "Graceful shutdown completed"
+                    
+      # Volumes configuration
+      volumes:
+        # Configuration volume from ConfigMap
+        - name: prometheus-config-volume
+          configMap:
+            name: prometheus-config
+            defaultMode: 0644
+            items:
+              - key: prometheus.yml
+                path: prometheus.yml
+              - key: financial_services_rules.yml
+                path: rules/financial_services_rules.yml
+                mode: 0644
+              - key: infrastructure_rules.yml
+                path: rules/infrastructure_rules.yml
+                mode: 0644
+                
+        # Additional rules volume
+        - name: prometheus-rules-volume
+          configMap:
+            name: prometheus-rules
+            defaultMode: 0644
+            optional: true
+            
+        # Persistent storage volume for metrics data
+        - name: prometheus-storage-volume
+          persistentVolumeClaim:
+            claimName: prometheus-pvc
+            
+        # Temporary volume for runtime files
+        - name: prometheus-tmp-volume
+          emptyDir:
+            sizeLimit: 1Gi
+            medium: Memory

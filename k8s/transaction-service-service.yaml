@@ -1,0 +1,230 @@
+# Kubernetes Service Configuration for Transaction Service
+# Purpose: Exposes the transaction-service microservice within the financial-services cluster
+# This service enables secure communication for financial transaction processing workflows
+# Compliant with enterprise security standards and regulatory requirements
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: transaction-service
+  namespace: financial-services
+  labels:
+    # Core application labels for service identification
+    app: transaction-service
+    component: backend
+    tier: critical
+    version: v1.0.0
+    
+    # Microservices architecture labels
+    service.istio.io/canonical-name: transaction-service
+    service.istio.io/canonical-revision: v1.0.0
+    
+    # Business domain labels for financial services
+    domain: financial-platform
+    business-unit: transaction-processing
+    data-classification: restricted
+    
+    # Compliance and regulatory labels
+    compliance.sox: "true"
+    compliance.pci-dss: "true"
+    compliance.gdpr: "true"
+    
+    # Operational labels for monitoring and management
+    monitoring.prometheus.io/enabled: "true"
+    logging.fluentd.io/enabled: "true"
+    tracing.jaeger.io/enabled: "true"
+    
+    # Environment and deployment tracking
+    environment: production
+    deployed-by: argocd
+    managed-by: kubernetes
+    
+  annotations:
+    # Service discovery and load balancing annotations
+    service.beta.kubernetes.io/load-balancer-source-ranges: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
+    prometheus.io/interval: "10s"
+    
+    # Performance and scaling annotations
+    service.kubernetes.io/topology-aware-hints: auto
+    service.kubernetes.io/session-affinity-timeout: "10800"
+    
+    # Security annotations for financial services compliance
+    security.financial-platform.io/tls-required: "true"
+    security.financial-platform.io/audit-logging: "enabled"
+    security.financial-platform.io/data-encryption: "required"
+    
+    # Service mesh annotations for Istio integration
+    sidecar.istio.io/inject: "true"
+    traffic.sidecar.istio.io/includeInboundPorts: "8080"
+    traffic.sidecar.istio.io/excludeOutboundPorts: "15090,15021,15020"
+    
+    # Business continuity and disaster recovery
+    backup.financial-platform.io/enabled: "true"
+    disaster-recovery.financial-platform.io/rpo: "1h"
+    disaster-recovery.financial-platform.io/rto: "15m"
+    
+    # Cost optimization and resource management
+    cost-center: "financial-services"
+    budget-code: "FINTECH-2025"
+    resource-optimization: "enabled"
+    
+    # Documentation and support information
+    description: "Kubernetes Service for transaction processing microservice - handles financial transaction workflows and payment processing"
+    documentation: "https://docs.financial-platform.com/services/transaction-service"
+    support-contact: "fintech-platform-team@company.com"
+    incident-escalation: "fintech-oncall@company.com"
+    
+    # Change management and versioning
+    last-modified: "2025-01-13"
+    change-ticket: "CHG-2025-001"
+    deployment-pipeline: "github-actions"
+    
+spec:
+  # Service type optimized for internal cluster communication
+  # ClusterIP provides secure internal networking for microservices architecture
+  type: ClusterIP
+  
+  # Pod selector configuration for transaction service identification
+  selector:
+    app: transaction-service
+    component: backend
+    tier: critical
+  
+  # Port configuration for transaction processing service
+  ports:
+    # Primary application port for transaction processing
+    - name: http
+      protocol: TCP
+      port: 80
+      targetPort: 8080
+      appProtocol: http
+    
+    # Management and health check port
+    - name: management
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+      appProtocol: http
+    
+    # Metrics port for Prometheus monitoring
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+      appProtocol: http
+  
+  # Session affinity configuration for financial transaction consistency
+  # Ensures transaction state consistency across requests
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours for long-running financial transactions
+  
+  # IP family configuration for enterprise networking requirements
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4
+  
+  # Internal traffic policy for enhanced security and performance
+  # Local traffic policy reduces latency for critical financial operations
+  internalTrafficPolicy: Local
+  
+  # External traffic policy configuration
+  externalTrafficPolicy: Cluster
+
+---
+# Service Monitor for Prometheus integration
+# Enables comprehensive monitoring of transaction service metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: transaction-service-monitor
+  namespace: financial-services
+  labels:
+    app: transaction-service
+    monitoring: prometheus
+    tier: critical
+spec:
+  selector:
+    matchLabels:
+      app: transaction-service
+  endpoints:
+    - port: metrics
+      interval: 10s
+      path: /actuator/prometheus
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service_name
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: kubernetes_namespace
+  namespaceSelector:
+    matchNames:
+      - financial-services
+
+---
+# Network Policy for enhanced security
+# Implements zero-trust networking principles for financial services
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: transaction-service-network-policy
+  namespace: financial-services
+  labels:
+    app: transaction-service
+    security: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: transaction-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow ingress from API Gateway and other financial services
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: financial-services
+        - namespaceSelector:
+            matchLabels:
+              name: api-gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+        - protocol: TCP
+          port: 8081
+    # Allow ingress from monitoring systems
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+  egress:
+    # Allow egress to databases and external financial APIs
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: database
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: external-apis
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53

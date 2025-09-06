@@ -1,0 +1,86 @@
+# Kubernetes Service configuration for Apache Zookeeper ensemble
+# This service provides stable network endpoints for Kafka brokers and other services
+# to discover and connect to Zookeeper pods for cluster coordination and state management
+apiVersion: v1
+kind: Service
+metadata:
+  # Service name following Kubernetes naming conventions
+  name: zookeeper-service
+  
+  # Namespace for the unified financial services platform
+  namespace: ufs
+  
+  # Labels for service identification and management
+  labels:
+    app: zookeeper
+    component: coordination
+    tier: infrastructure
+    version: "3.6"
+    managed-by: kubernetes
+    part-of: kafka-ecosystem
+    environment: production
+    
+  # Annotations for additional metadata and configuration
+  annotations:
+    # Service description and purpose
+    service.beta.kubernetes.io/description: "Zookeeper service for Apache Kafka cluster coordination"
+    
+    # Load balancer configuration for internal traffic
+    service.beta.kubernetes.io/load-balancer-source-ranges: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+    
+    # Prometheus monitoring annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "2181"
+    prometheus.io/path: "/metrics"
+    
+    # Financial services compliance annotations
+    compliance.financial-services/data-classification: "internal"
+    compliance.financial-services/service-tier: "critical"
+    compliance.financial-services/backup-required: "true"
+    
+    # Documentation and support information
+    documentation.url: "https://zookeeper.apache.org/"
+    support.contact: "platform-team@financial-services.com"
+    
+spec:
+  # Service type for internal cluster communication
+  # ClusterIP provides stable internal DNS name and IP address
+  type: ClusterIP
+  
+  # Selector to match Zookeeper pods
+  # Must match the labels on the Zookeeper deployment/statefulset pods
+  selector:
+    app: zookeeper
+    component: coordination
+    
+  # Port configuration for Zookeeper services
+  ports:
+    # Client port - Used by Kafka brokers and other clients to connect to Zookeeper
+    - name: client
+      protocol: TCP
+      port: 2181          # Service port exposed within the cluster
+      targetPort: 2181    # Port on the Zookeeper container
+      
+    # Follower port - Used for Zookeeper ensemble peer communication
+    - name: follower
+      protocol: TCP
+      port: 2888          # Service port for peer communication
+      targetPort: 2888    # Port on the Zookeeper container
+      
+    # Leader election port - Used for Zookeeper leader election process
+    - name: leader-election
+      protocol: TCP
+      port: 3888          # Service port for leader election
+      targetPort: 3888    # Port on the Zookeeper container
+      
+  # Session affinity configuration for consistent client connections
+  # ClientIP ensures that requests from the same client IP are routed to the same pod
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 10800  # 3 hours session timeout for financial transaction consistency
+      
+  # IP families configuration for dual-stack support
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack

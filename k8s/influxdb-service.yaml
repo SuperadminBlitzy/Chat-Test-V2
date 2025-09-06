@@ -1,0 +1,142 @@
+# Kubernetes Service manifest for InfluxDB time-series database
+# Version: v1
+# Purpose: Exposes InfluxDB deployment within the cluster for analytics-service and other microservices
+# Compliance: Financial services grade with enterprise security and monitoring standards
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: influxdb-service
+  namespace: default
+  labels:
+    # Application identification labels
+    app: influxdb
+    app.kubernetes.io/name: influxdb
+    app.kubernetes.io/instance: influxdb-primary
+    app.kubernetes.io/version: "2.7.4"
+    app.kubernetes.io/component: database
+    app.kubernetes.io/part-of: financial-platform
+    app.kubernetes.io/managed-by: kubernetes
+    
+    # Financial services specific labels
+    tier: data
+    database-type: time-series
+    criticality: high
+    compliance: financial-grade
+    data-classification: confidential
+    
+    # Operational labels
+    environment: production
+    team: platform
+    cost-center: infrastructure
+    backup-required: "true"
+    monitoring-enabled: "true"
+    
+  annotations:
+    # Service documentation and metadata
+    description: "InfluxDB time-series database service for financial metrics and performance monitoring"
+    documentation: "https://docs.influxdata.com/influxdb/v2.7/"
+    owner: "platform-team@financial-platform.com"
+    version: "2.7.4"
+    
+    # Monitoring and observability annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8086"
+    prometheus.io/path: "/metrics"
+    prometheus.io/scheme: "http"
+    
+    # Service mesh compatibility (Istio)
+    service.istio.io/canonical-name: "influxdb"
+    service.istio.io/canonical-revision: "v2.7.4"
+    
+    # Security annotations
+    security.financial-platform.com/encryption-required: "true"
+    security.financial-platform.com/pci-compliant: "true"
+    security.financial-platform.com/access-control: "internal-only"
+    
+    # Operational annotations
+    deployment.kubernetes.io/revision: "1"
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"v1","kind":"Service","metadata":{"name":"influxdb-service","namespace":"default"}}
+    
+    # Backup and disaster recovery
+    backup.financial-platform.com/enabled: "true"
+    backup.financial-platform.com/frequency: "hourly"
+    backup.financial-platform.com/retention: "90d"
+    
+    # Performance and SLA annotations
+    sla.financial-platform.com/availability: "99.9%"
+    sla.financial-platform.com/response-time: "<100ms"
+    performance.financial-platform.com/expected-qps: "10000"
+    
+    # Compliance and audit annotations
+    audit.financial-platform.com/log-level: "detailed"
+    compliance.financial-platform.com/pci-dss: "required"
+    compliance.financial-platform.com/sox-compliant: "true"
+    
+    # Resource optimization
+    resources.financial-platform.com/cost-optimization: "enabled"
+    resources.financial-platform.com/rightsizing: "monitored"
+
+spec:
+  # Service type - ClusterIP for internal cluster communication only
+  # This ensures InfluxDB is not exposed externally, maintaining security
+  type: ClusterIP
+  
+  # Pod selector - matches InfluxDB deployment pods
+  # These labels must match the deployment's pod template labels
+  selector:
+    app: influxdb
+    app.kubernetes.io/name: influxdb
+    app.kubernetes.io/component: database
+  
+  # Port configuration for InfluxDB HTTP API
+  ports:
+    - name: http-api
+      protocol: TCP
+      port: 8086          # Service port - standard InfluxDB HTTP API port
+      targetPort: 8086    # Container port - matches InfluxDB container configuration
+      appProtocol: http   # Application protocol specification for service mesh
+  
+  # Session affinity configuration
+  # None is appropriate for stateless database connections
+  # InfluxDB can handle requests from any pod instance
+  sessionAffinity: None
+  
+  # IP families configuration for dual-stack support
+  ipFamilies:
+    - IPv4
+  ipFamilyPolicy: SingleStack
+  
+  # Internal traffic policy for optimal routing
+  # Local routing when possible to reduce latency for financial transactions
+  internalTrafficPolicy: Local
+
+---
+# ServiceMonitor for Prometheus integration
+# Enables automatic discovery and monitoring of InfluxDB metrics
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: influxdb-service-monitor
+  namespace: default
+  labels:
+    app: influxdb
+    monitoring: prometheus
+    release: prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: influxdb
+      monitoring-enabled: "true"
+  endpoints:
+    - port: http-api
+      path: /metrics
+      interval: 30s
+      scrapeTimeout: 10s
+      honorLabels: true
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_name]
+          targetLabel: service_name
+        - sourceLabels: [__meta_kubernetes_namespace]
+          targetLabel: kubernetes_namespace

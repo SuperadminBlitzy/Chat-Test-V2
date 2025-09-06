@@ -1,0 +1,257 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service
+  namespace: default
+  labels:
+    app: ai-service
+    component: ai-engine
+    version: v1
+    tier: critical
+    environment: production
+    service-type: microservice
+    business-unit: ai-analytics
+    compliance: pci-dss
+    qos-class: guaranteed
+    platform: financial-services
+  annotations:
+    # Prometheus monitoring configuration
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9090"
+    prometheus.io/path: "/actuator/prometheus"
+    prometheus.io/scheme: "http"
+    
+    # Istio service mesh annotations
+    service.istio.io/canonical-name: "ai-service"
+    service.istio.io/canonical-revision: "v1"
+    traffic.sidecar.istio.io/includeInboundPorts: "8000,9090,8080"
+    
+    # Service discovery and load balancing
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "false"
+    
+    # Financial services compliance
+    compliance.financial.io/data-classification: "confidential"
+    compliance.financial.io/audit-required: "true"
+    compliance.financial.io/encryption-required: "true"
+    
+    # Business context annotations
+    business.financial.io/features: "risk-assessment,fraud-detection,recommendations"
+    business.financial.io/sla-tier: "critical"
+    business.financial.io/max-response-time: "500ms"
+    
+    # Monitoring and alerting
+    monitoring.financial.io/alert-on-failure: "true"
+    monitoring.financial.io/escalation-policy: "critical-financial-services"
+    
+    # Documentation and ownership
+    documentation.financial.io/api-docs: "https://api-docs.financial-platform.com/ai-service"
+    team.financial.io/owner: "ai-analytics-team"
+    team.financial.io/contact: "ai-team@financial-platform.com"
+    
+    # Deployment metadata
+    deployment.financial.io/last-updated: "2025-01-01T00:00:00Z"
+    deployment.financial.io/deployed-by: "ci-cd-pipeline"
+    
+spec:
+  # Service type for internal cluster communication
+  type: ClusterIP
+  
+  # Service selector to match AI service pods
+  selector:
+    app: ai-service
+    component: ai-engine
+    tier: critical
+  
+  # Port configuration for multiple service endpoints
+  ports:
+    # Main HTTP API port for AI services
+    - name: http-api
+      protocol: TCP
+      port: 80
+      targetPort: 8000
+      
+    # Health check and readiness probe port
+    - name: health-check
+      protocol: TCP
+      port: 8080
+      targetPort: 8080
+      
+    # Prometheus metrics port for monitoring
+    - name: metrics
+      protocol: TCP
+      port: 9090
+      targetPort: 9090
+      
+    # Management and actuator endpoints
+    - name: management
+      protocol: TCP
+      port: 8081
+      targetPort: 8081
+  
+  # Session affinity for consistent routing
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      timeoutSeconds: 3600
+  
+  # External traffic policy for performance optimization
+  externalTrafficPolicy: Cluster
+  
+  # Internal traffic policy for security
+  internalTrafficPolicy: Cluster
+
+---
+# Headless service for direct pod-to-pod communication
+apiVersion: v1
+kind: Service
+metadata:
+  name: ai-service-headless
+  namespace: default
+  labels:
+    app: ai-service
+    component: ai-engine
+    service-type: headless
+    tier: critical
+  annotations:
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+    prometheus.io/scrape: "false"
+spec:
+  clusterIP: None
+  selector:
+    app: ai-service
+    component: ai-engine
+  ports:
+    - name: http-api
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+  publishNotReadyAddresses: true
+
+---
+# Service Monitor for Prometheus integration
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: ai-service-monitor
+  namespace: default
+  labels:
+    app: ai-service
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: ai-service
+  endpoints:
+    - port: metrics
+      path: /actuator/prometheus
+      interval: 10s
+      scrapeTimeout: 5s
+      scheme: http
+      honorLabels: true
+      metricRelabelings:
+        - sourceLabels: [__name__]
+          regex: 'ai_service_.*'
+          targetLabel: service
+          replacement: 'ai-service'
+    - port: http-api
+      path: /metrics
+      interval: 15s
+      scrapeTimeout: 10s
+      scheme: http
+
+---
+# Pod Monitor for detailed pod-level metrics
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: ai-service-pod-monitor
+  namespace: default
+  labels:
+    app: ai-service
+    monitoring: prometheus
+spec:
+  selector:
+    matchLabels:
+      app: ai-service
+      component: ai-engine
+  podMetricsEndpoints:
+    - port: metrics
+      path: /actuator/prometheus
+      interval: 10s
+      scheme: http
+    - port: management
+      path: /actuator/health
+      interval: 30s
+      scheme: http
+
+---
+# Network Policy for AI service security
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-service-network-policy
+  namespace: default
+  labels:
+    app: ai-service
+    security: network-policy
+spec:
+  podSelector:
+    matchLabels:
+      app: ai-service
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow traffic from other microservices
+    - from:
+        - podSelector:
+            matchLabels:
+              app: api-gateway
+        - podSelector:
+            matchLabels:
+              app: financial-service
+        - podSelector:
+            matchLabels:
+              app: risk-service
+      ports:
+        - protocol: TCP
+          port: 8000
+    # Allow monitoring traffic
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 9090
+    # Allow health check traffic
+    - from: []
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow database connections
+    - to:
+        - podSelector:
+            matchLabels:
+              app: postgresql
+        - podSelector:
+            matchLabels:
+              app: mongodb
+      ports:
+        - protocol: TCP
+          port: 5432
+        - protocol: TCP
+          port: 27017
+    # Allow external API calls
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+    # Allow DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53

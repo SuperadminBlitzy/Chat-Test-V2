@@ -1,0 +1,74 @@
+# Test Configuration for Risk Assessment Service
+# This configuration file provides test-specific overrides for the AI-Powered Risk Assessment Engine
+# Supports F-002: AI-Powered Risk Assessment Engine testing requirements
+# Enables isolated testing environment with in-memory database and disabled external dependencies
+
+spring:
+  # Application identity configuration for test environment
+  application:
+    name: risk-assessment-service
+  
+  # Configuration server integration - optional for testing
+  # Allows graceful fallback when config server is not available during tests
+  config:
+    import: optional:configserver:
+  
+  # H2 In-Memory Database Configuration
+  # Provides fast, isolated database for unit and integration testing
+  # Ensures clean state for each test execution without external database dependencies
+  datasource:
+    url: jdbc:h2:mem:riskdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driverClassName: org.h2.Driver
+    username: sa
+    password: ""
+    
+  # JPA/Hibernate Configuration for Test Environment
+  # Optimized for testing with automatic schema generation and SQL logging
+  jpa:
+    # H2-specific dialect for optimal compatibility
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      # Create-drop strategy ensures clean state for each test run
+      # Tables are created at startup and dropped at shutdown
+      ddl-auto: create-drop
+    # Enable SQL logging for debugging test scenarios
+    show-sql: true
+    
+  # Kafka Configuration for Test Environment
+  # Configured for local testing with test-specific consumer group
+  kafka:
+    consumer:
+      # Test-specific consumer group to avoid conflicts with other environments
+      group-id: risk-assessment-test-group
+      # Start consuming from earliest available messages for consistent test behavior
+      auto-offset-reset: earliest
+    # Local Kafka broker configuration for testing
+    bootstrap-servers: localhost:9092
+
+# Eureka Service Discovery Configuration
+# Disabled for testing to avoid external service dependencies
+eureka:
+  client:
+    # Disable service registration and discovery for isolated testing
+    enabled: false
+
+# Logging Configuration for Test Environment
+# Enhanced logging levels for debugging and test verification
+logging:
+  level:
+    # Enable DEBUG logging for risk assessment service components
+    # Provides detailed logs for AI model execution and risk calculation debugging
+    com.ufs.risk: DEBUG
+    # Enable DEBUG logging for Spring Web components
+    # Helps debug REST API interactions and request/response processing
+    org.springframework.web: DEBUG
+    # Suppress verbose Hibernate logs to reduce noise
+    # ERROR level prevents SQL statement logging clutter while maintaining error visibility
+    org.hibernate: ERROR
+
+# Server Configuration for Test Environment
+# Random port assignment prevents port conflicts during parallel test execution
+server:
+  # Port 0 enables automatic port assignment by the OS
+  # Prevents conflicts when running multiple test instances simultaneously
+  port: 0

@@ -1,0 +1,113 @@
+# Grafana Service for Financial Services Monitoring Platform
+# This service exposes the Grafana deployment within the monitoring namespace
+# Enables access to Grafana UI for metrics visualization and dashboard management
+# Part of the comprehensive observability stack for financial services compliance
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+  labels:
+    # Standard Kubernetes application labels
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/version: "10.2.x"
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ufs-observability
+    app.kubernetes.io/managed-by: argocd
+    
+    # Financial services specific labels for compliance and governance
+    financial-services.io/tier: observability
+    financial-services.io/environment: production
+    financial-services.io/compliance: required
+    financial-services.io/criticality: high
+    
+    # Monitoring and observability labels
+    monitoring.io/scrape: "true"
+    monitoring.io/dashboard-provider: "true"
+    observability.io/component: visualization
+    
+  annotations:
+    # Service discovery annotations for Prometheus
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "3000"
+    prometheus.io/path: "/metrics"
+    
+    # Documentation and operational annotations
+    description: "Grafana service for financial services monitoring and visualization"
+    documentation: "https://docs.financial-platform.com/monitoring/grafana"
+    support.contact: "platform-team@financial-services.com"
+    
+    # Change management annotations
+    deployment.strategy: "rolling-update"
+    last-updated: "2024-01-15"
+    version: "10.2.x"
+    
+    # Network policy annotations
+    network-policy.io/ingress: "allow-monitoring-namespace"
+    network-policy.io/egress: "allow-all"
+    
+    # Service mesh annotations
+    service-mesh.io/inject: "true"
+    service-mesh.io/protocol: "http"
+
+spec:
+  # ClusterIP service type for internal cluster communication
+  # Grafana will be accessed through ingress or port-forwarding for external access
+  type: ClusterIP
+  
+  # Service ports configuration
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+      # Standard Grafana HTTP port for dashboard access
+      # Used by ingress controllers and internal service communication
+  
+  # Pod selector to route traffic to Grafana pods
+  # Matches the labels defined in the Grafana deployment
+  selector:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: grafana
+  
+  # Session affinity for consistent user experience
+  # Important for dashboard state management and user sessions
+  sessionAffinity: ClientIP
+  sessionAffinityConfig:
+    clientIP:
+      # Session timeout for financial services compliance
+      timeoutSeconds: 3600
+
+---
+# Headless service for StatefulSet support (if needed for persistence)
+# Provides stable network identities for Grafana instances
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana-headless
+  namespace: monitoring
+  labels:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: grafana
+    app.kubernetes.io/version: "10.2.x"
+    app.kubernetes.io/component: monitoring
+    app.kubernetes.io/part-of: ufs-observability
+    service-type: headless
+    
+  annotations:
+    description: "Headless service for Grafana StatefulSet network identity"
+    service.alpha.kubernetes.io/tolerate-unready-endpoints: "true"
+
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  ports:
+    - name: http
+      port: 3000
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: grafana
+    app.kubernetes.io/instance: grafana

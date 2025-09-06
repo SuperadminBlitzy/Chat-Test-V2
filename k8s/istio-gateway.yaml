@@ -1,0 +1,135 @@
+# Unified Financial Services Platform - Istio Gateway Configuration
+# This gateway serves as the primary ingress point for all external traffic
+# Handles TLS termination and routing for the financial services platform
+# Complies with financial industry security standards and regulatory requirements
+
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: ufs-gateway
+  namespace: istio-system
+  labels:
+    # Application identification labels
+    app: ufs-platform
+    component: gateway
+    version: v1.0.0
+    environment: production
+    tier: infrastructure
+    
+    # Financial services specific labels
+    compliance.financial/pci-dss: "required"
+    compliance.financial/sox: "required"
+    security.financial/tls-required: "true"
+    
+    # Monitoring and observability labels
+    monitoring.prometheus.io/scrape: "true"
+    monitoring.prometheus.io/port: "15020"
+    monitoring.prometheus.io/path: "/stats/prometheus"
+    
+    # ArgoCD and GitOps labels
+    argocd.argoproj.io/instance: financial-services-app
+    deployment.strategy: blue-green
+    
+    # Cost optimization and resource management
+    cost-center: "financial-platform"
+    billing-category: "infrastructure"
+    
+  annotations:
+    # Security and compliance annotations
+    security.istio.io/tlsMode: "SIMPLE"
+    security.financial/audit-required: "true"
+    compliance.financial/data-classification: "confidential"
+    
+    # Performance and reliability annotations
+    performance.istio.io/connection-pool: "enabled"
+    reliability.istio.io/circuit-breaker: "enabled"
+    
+    # Operational annotations
+    description: "Primary ingress gateway for Unified Financial Services Platform"
+    maintainer: "platform-team@ufs.com"
+    documentation: "https://docs.ufs.com/infrastructure/istio-gateway"
+    last-updated: "2024-01-15"
+    
+    # Monitoring annotations for Prometheus
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "15020"
+    prometheus.io/path: "/stats/prometheus"
+    
+    # Audit logging configuration
+    audit.financial/log-level: "metadata"
+    audit.financial/sensitive-data: "mask"
+    
+spec:
+  # Selector for Istio ingress gateway pods
+  # Targets the default Istio ingress gateway deployment
+  selector:
+    istio: ingressgateway
+    
+  # Server configurations for HTTP and HTTPS traffic
+  servers:
+    # HTTP Server Configuration (Port 80)
+    # Redirects all HTTP traffic to HTTPS for security compliance
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        # Wildcard to catch all HTTP requests
+        - "*"
+      # TLS configuration for HTTP server
+      tls:
+        # Force HTTPS redirect for all HTTP traffic
+        # This ensures all financial data is encrypted in transit
+        httpsRedirect: true
+        
+    # HTTPS Server Configuration (Port 443)
+    # Primary secure endpoint for all financial services traffic
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      hosts:
+        # Primary API endpoint for financial services
+        - "api.ufs.com"
+        # Wildcard subdomain support for various services
+        - "*.ufs.com"
+      # TLS configuration for HTTPS server
+      tls:
+        # Simple TLS mode with server-side certificates
+        # Suitable for edge termination in financial services
+        mode: SIMPLE
+        # Reference to TLS credential containing certificate and private key
+        # Must be created as a Kubernetes secret in istio-system namespace
+        credentialName: "ufs-tls-credential"
+        # Minimum TLS version for financial compliance
+        minProtocolVersion: TLSV1_2
+        # Maximum TLS version for future compatibility
+        maxProtocolVersion: TLSV1_3
+        # Cipher suites for enhanced security (financial industry standard)
+        cipherSuites:
+          - "ECDHE-RSA-AES256-GCM-SHA384"
+          - "ECDHE-RSA-AES128-GCM-SHA256"
+          - "ECDHE-RSA-AES256-SHA384"
+          - "ECDHE-RSA-AES128-SHA256"
+          
+    # Additional HTTPS server for internal services (optional)
+    # Can be used for service-to-service communication within the mesh
+    - port:
+        number: 8443
+        name: https-internal
+        protocol: HTTPS
+      hosts:
+        # Internal service endpoints
+        - "internal.ufs.com"
+        - "*.internal.ufs.com"
+      tls:
+        mode: SIMPLE
+        credentialName: "ufs-internal-tls-credential"
+        minProtocolVersion: TLSV1_2
+        
+  # Workload selector (if needed for specific gateway deployments)
+  # This is optional and typically not needed for standard Istio gateways
+  # workloadSelector:
+  #   labels:
+  #     app: istio-gateway
+  #     version: v1.19.0

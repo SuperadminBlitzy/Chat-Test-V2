@@ -1,0 +1,250 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: customer-service
+  namespace: ufs
+  labels:
+    app: customer-service
+    tier: backend
+    version: v1.0.0
+    component: microservice
+    business-capability: customer-onboarding
+    criticality: important
+    compliance: pci-dss
+  annotations:
+    deployment.kubernetes.io/revision: "1"
+    # Financial services compliance annotations
+    finservices.io/compliance-framework: "SOX,PCI-DSS,GDPR,Basel-III"
+    finservices.io/data-classification: "confidential"
+    finservices.io/business-capability: "F-004-Digital-Customer-Onboarding"
+    # Monitoring and observability
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/actuator/prometheus"
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: customer-service
+  template:
+    metadata:
+      labels:
+        app: customer-service
+        tier: backend
+        version: v1.0.0
+        component: microservice
+        business-capability: customer-onboarding
+        qos-class: burstable
+        criticality: important
+      annotations:
+        # Prometheus monitoring annotations for pod-level metrics
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+        # Service mesh integration
+        sidecar.istio.io/inject: "true"
+        # Security policy annotations
+        security.alpha.kubernetes.io/sysctls: "net.core.somaxconn=32768"
+        # Financial services audit logging
+        audit.finservices.io/log-level: "detailed"
+        audit.finservices.io/include-request-body: "true"
+    spec:
+      # Security: Use dedicated service account with minimal permissions
+      serviceAccountName: customer-service-sa
+      
+      # Security: Run as non-root user
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1001
+        runAsGroup: 1001
+        fsGroup: 1001
+        # Ensure filesystem permissions are secure
+        fsGroupChangePolicy: "OnRootMismatch"
+        # Security: Drop all capabilities
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Scheduling preferences for high availability
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - customer-service
+              topologyKey: kubernetes.io/hostname
+      
+      # Ensure graceful shutdown for financial transactions
+      terminationGracePeriodSeconds: 60
+      
+      containers:
+      - name: customer-service
+        # Spring Boot 3.2+ Java 21 LTS microservice image
+        image: ufs/customer-service:1.0.0
+        imagePullPolicy: IfNotPresent
+        
+        ports:
+        - name: http
+          containerPort: 8080
+          protocol: TCP
+        - name: management
+          containerPort: 8081
+          protocol: TCP
+        - name: debug
+          containerPort: 5005
+          protocol: TCP
+        
+        # Resource allocation based on "Important" tier QoS for financial services
+        resources:
+          requests:
+            cpu: "1000m"      # 1 CPU core for consistent performance
+            memory: "2Gi"     # 2GB RAM for Spring Boot application
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "2000m"      # 2 CPU cores maximum for burst capacity
+            memory: "4Gi"     # 4GB RAM maximum
+            ephemeral-storage: "2Gi"
+        
+        # Environment configuration from ConfigMaps and Secrets
+        envFrom:
+        - configMapRef:
+            name: customer-service-config
+        - secretRef:
+            name: customer-service-secrets
+        
+        # Additional environment variables for Spring Boot
+        env:
+        - name: SPRING_PROFILES_ACTIVE
+          value: "production"
+        - name: JAVA_OPTS
+          value: >-
+            -Xms1g -Xmx3g
+            -XX:+UseG1GC
+            -XX:+UseStringDeduplication
+            -XX:+OptimizeStringConcat
+            -Djava.security.egd=file:/dev/./urandom
+            -Dspring.jmx.enabled=true
+            -Dmanagement.endpoints.web.exposure.include=health,info,metrics,prometheus
+        - name: SERVER_PORT
+          value: "8080"
+        - name: MANAGEMENT_SERVER_PORT
+          value: "8081"
+        - name: LOGGING_LEVEL_ROOT
+          value: "INFO"
+        - name: LOGGING_LEVEL_COM_UFS
+          value: "DEBUG"
+        # Financial services specific configuration
+        - name: FINSERVICES_COMPLIANCE_MODE
+          value: "strict"
+        - name: FINSERVICES_AUDIT_ENABLED
+          value: "true"
+        - name: FINSERVICES_ENCRYPTION_ENABLED
+          value: "true"
+        
+        # Health probes with Spring Boot Actuator endpoints
+        livenessProbe:
+          httpGet:
+            path: /actuator/health/liveness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 15
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        readinessProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Startup probe for slower initialization
+        startupProbe:
+          httpGet:
+            path: /actuator/health/readiness
+            port: 8080
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 12
+          successThreshold: 1
+        
+        # Container security context
+        securityContext:
+          runAsNonRoot: true
+          runAsUser: 1001
+          runAsGroup: 1001
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
+          capabilities:
+            drop:
+            - ALL
+          seccompProfile:
+            type: RuntimeDefault
+        
+        # Volume mounts for logs and temporary files
+        volumeMounts:
+        - name: tmp-volume
+          mountPath: /tmp
+        - name: logs-volume
+          mountPath: /app/logs
+        - name: config-volume
+          mountPath: /app/config
+          readOnly: true
+        
+        # Lifecycle hooks for graceful shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/sh
+              - -c
+              - "sleep 15; curl -X POST http://localhost:8081/actuator/shutdown"
+      
+      # Volumes for security and operational requirements
+      volumes:
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      - name: logs-volume
+        emptyDir:
+          sizeLimit: 5Gi
+      - name: config-volume
+        configMap:
+          name: customer-service-config
+          defaultMode: 0444
+      
+      # DNS configuration for service discovery
+      dnsPolicy: ClusterFirst
+      dnsConfig:
+        options:
+        - name: ndots
+          value: "2"
+        - name: edns0
+  
+  # Rolling update strategy for zero-downtime deployments
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  
+  # Minimum time before deployment is considered successful
+  minReadySeconds: 30
+  
+  # Keep revision history for rollbacks
+  revisionHistoryLimit: 10
+  
+  # Progress deadline for deployment
+  progressDeadlineSeconds: 600

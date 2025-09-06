@@ -1,0 +1,468 @@
+# =============================================================================
+# Spring Boot Configuration - Development Environment
+# Risk Assessment Service - AI-Powered Risk Assessment Engine
+# =============================================================================
+
+# Server Configuration
+server:
+  port: 8083
+  servlet:
+    context-path: /api/v1
+  compression:
+    enabled: true
+    mime-types: application/json,application/xml,text/html,text/xml,text/plain
+  error:
+    include-message: always
+    include-binding-errors: always
+    include-stacktrace: on_param
+    include-exception: false
+
+# Spring Framework Configuration
+spring:
+  application:
+    name: risk-assessment-service
+  
+  # Configuration Server Integration (Optional)
+  config:
+    import: optional:configserver:http://localhost:8888
+  
+  # Database Configuration - PostgreSQL
+  datasource:
+    url: jdbc:postgresql://localhost:5432/ufs_risk_dev
+    username: devuser
+    password: devpassword
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      # Connection Pool Configuration for Development
+      pool-name: RiskAssessmentHikariCP
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 300000
+      max-lifetime: 1200000
+      connection-timeout: 20000
+      connection-test-query: SELECT 1
+      leak-detection-threshold: 60000
+      auto-commit: true
+      connection-init-sql: SET search_path TO risk_assessment,public
+  
+  # JPA and Hibernate Configuration
+  jpa:
+    hibernate:
+      ddl-auto: update
+      naming:
+        physical-strategy: org.hibernate.boot.model.naming.PhysicalNamingStrategyStandardImpl
+        implicit-strategy: org.springframework.boot.orm.jpa.hibernate.SpringImplicitNamingStrategy
+    show-sql: true
+    open-in-view: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+        use_sql_comments: true
+        jdbc:
+          batch_size: 25
+          fetch_size: 50
+        order_inserts: true
+        order_updates: true
+        generate_statistics: true
+        cache:
+          use_second_level_cache: true
+          use_query_cache: true
+          region:
+            factory_class: org.hibernate.cache.ehcache.EhCacheRegionFactory
+        connection:
+          provider_disables_autocommit: true
+  
+  # Kafka Configuration for Event-Driven Architecture
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: risk-assessment-group
+      auto-offset-reset: earliest
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.springframework.kafka.support.serializer.JsonDeserializer
+      properties:
+        spring.json.trusted.packages: "com.ufs.risk.model,com.ufs.common.events"
+        session.timeout.ms: 30000
+        heartbeat.interval.ms: 10000
+        max.poll.records: 100
+        fetch.min.bytes: 1024
+        fetch.max.wait.ms: 500
+        enable.auto.commit: true
+        auto.commit.interval.ms: 1000
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.springframework.kafka.support.serializer.JsonSerializer
+      properties:
+        acks: all
+        retries: 3
+        batch.size: 16384
+        linger.ms: 5
+        buffer.memory: 33554432
+        compression.type: snappy
+        max.in.flight.requests.per.connection: 5
+        enable.idempotence: true
+    properties:
+      security.protocol: PLAINTEXT
+      # For development, using PLAINTEXT. In production, use SASL_SSL or SSL
+      sasl.mechanism: PLAIN
+    streams:
+      application-id: risk-assessment-streams
+      default-key-serde: org.apache.kafka.common.serialization.Serdes$StringSerde
+      default-value-serde: org.springframework.kafka.support.serializer.JsonSerde
+      properties:
+        processing.guarantee: exactly_once_v2
+        topology.optimization: all
+        num.stream.threads: 2
+        commit.interval.ms: 1000
+        cache.max.bytes.buffering: 10485760
+  
+  # Data Source Configuration for Multiple Databases
+  datasource-mongodb:
+    uri: mongodb://localhost:27017/ufs_risk_dev
+    database: ufs_risk_dev
+    authentication-database: admin
+    username: devuser
+    password: devpassword
+    connection-timeout: 20000
+    socket-timeout: 0
+    server-selection-timeout: 30000
+    max-idle-time: 0
+    max-life-time: 0
+    max-connection-pool-size: 20
+    min-connection-pool-size: 5
+  
+  # Redis Configuration for Caching
+  redis:
+    host: localhost
+    port: 6379
+    password: 
+    database: 0
+    timeout: 2000ms
+    lettuce:
+      pool:
+        max-active: 20
+        max-idle: 10
+        min-idle: 5
+        max-wait: -1ms
+      shutdown-timeout: 100ms
+  
+  # Jackson Configuration for JSON Processing
+  jackson:
+    serialization:
+      write-dates-as-timestamps: false
+      indent-output: true
+    deserialization:
+      fail-on-unknown-properties: false
+      accept-single-value-as-array: true
+    property-naming-strategy: SNAKE_CASE
+    default-property-inclusion: NON_NULL
+    time-zone: UTC
+    date-format: yyyy-MM-dd'T'HH:mm:ss.SSS'Z'
+
+# Eureka Client Configuration for Service Discovery
+eureka:
+  client:
+    serviceUrl:
+      defaultZone: http://localhost:8761/eureka/
+    register-with-eureka: true
+    fetch-registry: true
+    registry-fetch-interval-seconds: 30
+    instance-info-replication-interval-seconds: 30
+    initial-instance-info-replication-interval-seconds: 40
+    healthcheck:
+      enabled: true
+  instance:
+    hostname: localhost
+    prefer-ip-address: true
+    lease-renewal-interval-in-seconds: 30
+    lease-expiration-duration-in-seconds: 90
+    status-page-url-path: /actuator/info
+    health-check-url-path: /actuator/health
+    metadata-map:
+      version: 1.0.0
+      environment: development
+      service-type: risk-assessment
+      ai-enabled: true
+
+# Logging Configuration for Development
+logging:
+  level:
+    root: INFO
+    com.ufs.risk: DEBUG
+    org.springframework.web: DEBUG
+    org.springframework.security: DEBUG
+    org.springframework.kafka: DEBUG
+    org.hibernate: DEBUG
+    org.hibernate.SQL: DEBUG
+    org.hibernate.type.descriptor.sql.BasicBinder: TRACE
+    org.springframework.transaction: DEBUG
+    org.springframework.orm.jpa: DEBUG
+    org.springframework.data.mongodb: DEBUG
+    org.apache.kafka: INFO
+    org.springframework.cloud.loadbalancer: DEBUG
+    org.springframework.cloud.netflix.eureka: DEBUG
+  pattern:
+    console: "%clr(%d{yyyy-MM-dd HH:mm:ss.SSS}){faint} %clr(${LOG_LEVEL_PATTERN:-%5p}) %clr(${PID:- }){magenta} %clr(---){faint} %clr([%15.15t]){faint} %clr(%-40.40logger{39}){cyan} %clr(:){faint} %m%n"
+    file: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"
+  file:
+    name: logs/risk-assessment-service-dev.log
+    max-size: 100MB
+    max-history: 30
+    total-size-cap: 1GB
+
+# Security Configuration
+security:
+  jwt:
+    secret: ${JWT_SECRET_KEY_DEV:defaultSecretKeyForDevelopmentOnlyDoNotUseInProduction}
+    expiration: 86400000  # 24 hours in milliseconds
+    refresh-expiration: 604800000  # 7 days in milliseconds
+    issuer: ufs-risk-assessment-service
+    audience: ufs-platform
+  oauth2:
+    enabled: false  # Disabled for development, enable for production
+  cors:
+    allowed-origins: 
+      - http://localhost:3000
+      - http://localhost:4200
+      - http://localhost:8080
+    allowed-methods: GET,POST,PUT,DELETE,PATCH,OPTIONS
+    allowed-headers: "*"
+    allow-credentials: true
+    max-age: 3600
+
+# Actuator Configuration for Monitoring and Health Checks
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics,prometheus,env,configprops,mappings,beans,scheduledtasks,loggers,threaddump,heapdump
+      base-path: /actuator
+  endpoint:
+    health:
+      show-details: always
+      show-components: always
+      probes:
+        enabled: true
+    info:
+      enabled: true
+    metrics:
+      enabled: true
+  health:
+    diskspace:
+      enabled: true
+      threshold: 10GB
+    db:
+      enabled: true
+    kafka:
+      enabled: true
+    redis:
+      enabled: true
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 60s
+        descriptions: true
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.9,0.95,0.99
+      sla:
+        http.server.requests: 100ms,500ms,1s,2s
+  info:
+    build:
+      enabled: true
+    git:
+      enabled: true
+      mode: full
+    env:
+      enabled: true
+    java:
+      enabled: true
+    os:
+      enabled: true
+
+# Application-Specific Configuration
+app:
+  # AI/ML Configuration
+  ai:
+    model:
+      risk-assessment:
+        endpoint: http://localhost:8090/models/risk-assessment/predict
+        timeout: 5000
+        batch-size: 100
+        threshold:
+          low-risk: 300
+          medium-risk: 700
+          high-risk: 1000
+    feature-store:
+      enabled: true
+      url: http://localhost:8091/features
+      cache-ttl: 300
+  
+  # Risk Assessment Configuration
+  risk:
+    assessment:
+      enabled: true
+      real-time: true
+      batch-processing: true
+      historical-data-days: 365
+      model-refresh-interval: 3600  # 1 hour in seconds
+      confidence-threshold: 0.85
+      
+  # Compliance Configuration
+  compliance:
+    kyc:
+      enabled: true
+      auto-verification: true
+      manual-review-threshold: 700
+    aml:
+      enabled: true
+      screening-enabled: true
+      sanctions-check: true
+      pep-screening: true
+    
+  # External API Configuration
+  external:
+    credit-bureau:
+      url: http://localhost:8092/credit-score
+      timeout: 10000
+      retry-attempts: 3
+      api-key: ${CREDIT_BUREAU_API_KEY_DEV:dev-api-key}
+    
+    regulatory-data:
+      url: http://localhost:8093/regulatory
+      timeout: 5000
+      refresh-interval: 86400  # 24 hours in seconds
+    
+    market-data:
+      url: http://localhost:8094/market-data
+      timeout: 3000
+      websocket-enabled: true
+
+# Thread Pool Configuration
+thread-pool:
+  core-size: 10
+  max-size: 50
+  queue-capacity: 100
+  keep-alive-seconds: 60
+  thread-name-prefix: RiskAssessment-
+  rejection-policy: CallerRunsPolicy
+
+# Development-Specific Configurations
+dev:
+  # Enable H2 Console for quick database inspection if needed
+  h2-console:
+    enabled: false
+  
+  # Mock external services for development
+  mock-services:
+    enabled: true
+    credit-bureau: true
+    regulatory-data: true
+    market-data: false
+  
+  # Debug configurations
+  debug:
+    sql-queries: true
+    kafka-messages: true
+    api-calls: true
+    performance-metrics: true
+  
+  # Test data configuration
+  test-data:
+    auto-load: true
+    customers: 100
+    transactions: 1000
+    risk-profiles: 50
+
+# Resilience4j Configuration for Circuit Breaker and Retry
+resilience4j:
+  circuitbreaker:
+    instances:
+      ai-service:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        permittedNumberOfCallsInHalfOpenState: 3
+        automaticTransitionFromOpenToHalfOpenEnabled: true
+        waitDurationInOpenState: 5s
+        failureRateThreshold: 50
+        eventConsumerBufferSize: 10
+      credit-bureau:
+        registerHealthIndicator: true
+        slidingWindowSize: 10
+        minimumNumberOfCalls: 5
+        failureRateThreshold: 60
+        waitDurationInOpenState: 10s
+  
+  retry:
+    instances:
+      ai-service:
+        maxAttempts: 3
+        waitDuration: 1s
+        enableExponentialBackoff: true
+        exponentialBackoffMultiplier: 2
+      database:
+        maxAttempts: 3
+        waitDuration: 500ms
+        retryExceptions:
+          - java.sql.SQLException
+          - org.springframework.dao.DataAccessException
+  
+  timelimiter:
+    instances:
+      ai-service:
+        timeoutDuration: 5s
+        cancelRunningFuture: true
+      credit-bureau:
+        timeoutDuration: 10s
+        cancelRunningFuture: true
+
+# Cache Configuration
+cache:
+  redis:
+    default-ttl: 3600  # 1 hour
+    max-entries: 10000
+  caffeine:
+    enabled: true
+    maximum-size: 1000
+    expire-after-write: 300s  # 5 minutes
+    expire-after-access: 300s  # 5 minutes
+  risk-scores:
+    ttl: 1800  # 30 minutes
+    max-size: 5000
+  customer-profiles:
+    ttl: 7200  # 2 hours
+    max-size: 2000
+
+# Swagger/OpenAPI Configuration
+springdoc:
+  api-docs:
+    enabled: true
+    path: /api-docs
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    operations-sorter: method
+    tags-sorter: alpha
+    doc-expansion: none
+  show-actuator: true
+  group-configs:
+    - group: risk-assessment
+      paths-to-match: /api/v1/risk/**
+    - group: customer
+      paths-to-match: /api/v1/customer/**
+    - group: compliance
+      paths-to-match: /api/v1/compliance/**
+
+# Async Configuration
+async:
+  executor:
+    core-pool-size: 5
+    max-pool-size: 20
+    queue-capacity: 500
+    thread-name-prefix: AsyncRisk-
+    keep-alive-seconds: 60

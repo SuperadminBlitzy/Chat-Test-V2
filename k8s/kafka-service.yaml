@@ -1,0 +1,150 @@
+# Kubernetes Service configuration for Apache Kafka message broker
+# This service exposes Kafka brokers to other microservices within the cluster
+# for event-driven communication and real-time data streaming
+# 
+# Technology Stack Reference:
+# - Apache Kafka 3.6+ (Message Broker)
+# - Kubernetes 1.28+ (Container Orchestration)
+# - Prometheus monitoring integration
+# - ArgoCD deployment management
+#
+# Financial Services Use Cases:
+# - Real-time event processing
+# - Inter-service communication
+# - Transaction event streaming
+# - Risk assessment data flows
+# - Fraud detection event streams
+# - Regulatory audit logging
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: kafka-service
+  namespace: default
+  labels:
+    # Application identification labels
+    app: kafka
+    component: message-broker
+    service: kafka-service
+    tier: infrastructure
+    
+    # Financial services specific labels
+    business-domain: event-streaming
+    compliance-level: financial-grade
+    data-classification: internal
+    
+    # Operational labels
+    environment: production
+    version: "3.6"
+    managed-by: argocd
+    
+    # Monitoring and observability labels
+    monitoring: prometheus
+    logging: enabled
+    tracing: jaeger
+    
+    # Platform integration labels
+    platform: financial-services
+    architecture: microservices
+    pattern: event-driven
+    
+  annotations:
+    # Service description and documentation
+    description: "Apache Kafka message broker service for event-driven microservices communication"
+    owner: "platform-team"
+    support-contact: "platform-engineering@company.com"
+    documentation: "https://wiki.company.com/kafka-service"
+    
+    # ArgoCD integration annotations
+    argocd.argoproj.io/sync-wave: "1"
+    argocd.argoproj.io/managed: "true"
+    
+    # Prometheus monitoring annotations
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9308"
+    prometheus.io/path: "/metrics"
+    
+    # Service mesh integration (Istio)
+    service.istio.io/canonical-name: "kafka-service"
+    service.istio.io/canonical-revision: "v1"
+    
+    # Security annotations
+    security.company.com/encryption: "required"
+    security.company.com/authentication: "mTLS"
+    compliance.company.com/financial-grade: "true"
+    
+    # Operational annotations
+    ops.company.com/runbook: "https://runbooks.company.com/kafka-service"
+    ops.company.com/dashboard: "https://grafana.company.com/kafka-dashboard"
+    ops.company.com/alerts: "https://alertmanager.company.com/kafka-alerts"
+    
+    # Performance and scaling annotations
+    performance.company.com/expected-tps: "10000"
+    scaling.company.com/auto-scale: "enabled"
+    
+    # Backup and disaster recovery
+    backup.company.com/strategy: "continuous-replication"
+    dr.company.com/rpo: "30s"
+    dr.company.com/rto: "2m"
+
+spec:
+  # Service selector to match Kafka pods
+  # This selector will route traffic to pods labeled with app=kafka
+  selector:
+    app: kafka
+    component: message-broker
+    
+  # Service type configuration
+  # ClusterIP provides internal cluster access only, suitable for microservices communication
+  type: ClusterIP
+  
+  # Port configuration for Kafka service
+  ports:
+    # Client port for external microservices communication
+    # This is the standard Kafka client port for producer/consumer connections
+    - name: client
+      protocol: TCP
+      port: 9092
+      targetPort: 9092
+      # Port used by microservices for:
+      # - Message production (producers)
+      # - Message consumption (consumers)
+      # - Topic management operations
+      # - Consumer group coordination
+      
+    # Internal port for inter-broker communication
+    # This port is used for Kafka cluster internal operations
+    - name: internal
+      protocol: TCP  
+      port: 9093
+      targetPort: 9093
+      # Port used for:
+      # - Inter-broker replication
+      # - Leader election
+      # - Metadata synchronization
+      # - Cluster coordination
+      
+    # JMX metrics port for monitoring (optional but recommended for production)
+    - name: jmx
+      protocol: TCP
+      port: 9999
+      targetPort: 9999
+      # Port used for:
+      # - JMX metrics collection
+      # - Prometheus integration
+      # - Performance monitoring
+      # - Health checks
+      
+  # Session affinity configuration
+  # For Kafka, session affinity is typically not required as clients
+  # handle broker discovery and connection management automatically
+  sessionAffinity: None
+  
+  # Service publishing configuration
+  # This ensures the service is published to the cluster DNS
+  publishNotReadyAddresses: false
+  
+  # IP family policy for dual-stack support
+  ipFamilyPolicy: SingleStack
+  ipFamilies:
+    - IPv4

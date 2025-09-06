@@ -1,0 +1,454 @@
+# InfluxDB Kubernetes Deployment for Financial Services Platform
+# Purpose: Time-series database for storing financial metrics and performance monitoring data
+# Version: InfluxDB 2.7 - optimized for high write throughput and time-stamped data
+# Security: Enterprise-grade configuration with non-root user, security contexts, and RBAC
+# Monitoring: Prometheus integration for observability stack
+# Compliance: Configured for financial services regulatory requirements
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: influxdb-deployment
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+    tier: monitoring
+    version: "2.7"
+    environment: production
+    criticality: important
+    # Financial services compliance labels
+    data-classification: internal
+    regulatory-scope: financial-metrics
+  annotations:
+    # Deployment strategy annotations
+    deployment.kubernetes.io/revision: "1"
+    description: "InfluxDB time-series database for financial metrics and performance monitoring"
+    # Monitoring annotations for Prometheus scraping
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8086"
+    prometheus.io/path: "/metrics"
+    # Security annotations
+    seccomp.security.alpha.kubernetes.io/pod: runtime/default
+    # Financial services compliance annotations
+    compliance.fintech.io/data-retention: "7-years"
+    compliance.fintech.io/encryption: "required"
+spec:
+  # Single replica for initial deployment - can be scaled horizontally with StatefulSet for HA
+  replicas: 1
+  
+  # Deployment strategy for zero-downtime updates
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 25%
+      maxUnavailable: 25%
+  
+  # Label selector for pod management
+  selector:
+    matchLabels:
+      app: influxdb
+      component: time-series-database
+  
+  # Pod template specification
+  template:
+    metadata:
+      labels:
+        app: influxdb
+        component: time-series-database
+        tier: monitoring
+        version: "2.7"
+        # QoS classification for important monitoring services
+        qos-class: burstable
+        criticality: important
+      annotations:
+        # Prometheus monitoring annotations
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8086"
+        prometheus.io/path: "/metrics"
+        # Security annotations
+        container.apparmor.security.beta.kubernetes.io/influxdb: runtime/default
+        # Checksum for configuration changes to trigger pod restart
+        checksum/config: "placeholder-for-config-checksum"
+        checksum/secret: "placeholder-for-secret-checksum"
+    
+    spec:
+      # Security context at pod level
+      securityContext:
+        # Run as non-root user for security compliance
+        runAsNonRoot: true
+        runAsUser: 1000
+        runAsGroup: 1000
+        fsGroup: 1000
+        # Security enhancements
+        seccompProfile:
+          type: RuntimeDefault
+      
+      # Service account for RBAC
+      serviceAccountName: influxdb-service-account
+      
+      # Termination grace period for graceful shutdowns
+      terminationGracePeriodSeconds: 60
+      
+      # Container specification
+      containers:
+      - name: influxdb
+        # InfluxDB 2.7 official image
+        image: influxdb:2.7
+        imagePullPolicy: Always
+        
+        # Container ports
+        ports:
+        - name: http
+          containerPort: 8086
+          protocol: TCP
+        - name: rpc
+          containerPort: 8088
+          protocol: TCP
+        
+        # Environment variables from ConfigMap and Secrets
+        envFrom:
+        - configMapRef:
+            name: influxdb-config
+        - secretRef:
+            name: influxdb-secrets
+        
+        # Additional environment variables for financial services compliance
+        env:
+        - name: INFLUXDB_DATA_ENGINE
+          value: "tsm1"
+        - name: INFLUXDB_REPORTING_DISABLED
+          value: "true"
+        - name: INFLUXDB_HTTP_LOG_ENABLED
+          value: "true"
+        - name: INFLUXDB_HTTP_AUTH_ENABLED
+          value: "true"
+        - name: INFLUXDB_HTTP_FLUX_ENABLED
+          value: "true"
+        # Timezone for financial reporting compliance
+        - name: TZ
+          value: "UTC"
+        # Pod metadata for service discovery
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        
+        # Resource requirements - Important tier for monitoring infrastructure
+        resources:
+          requests:
+            cpu: "500m"
+            memory: "1Gi"
+            # Ephemeral storage for temporary data
+            ephemeral-storage: "1Gi"
+          limits:
+            cpu: "1"
+            memory: "2Gi"
+            ephemeral-storage: "2Gi"
+        
+        # Volume mounts for persistent storage
+        volumeMounts:
+        - name: influxdb-storage
+          mountPath: /var/lib/influxdb2
+          # Ensure data directory has correct permissions
+          subPath: data
+        - name: influxdb-config-volume
+          mountPath: /etc/influxdb2
+          readOnly: true
+        # Temporary directory for processing
+        - name: tmp-volume
+          mountPath: /tmp
+        
+        # Container security context
+        securityContext:
+          # Run as non-root user
+          runAsNonRoot: true
+          runAsUser: 1000
+          runAsGroup: 1000
+          # Prevent privilege escalation
+          allowPrivilegeEscalation: false
+          # Drop all capabilities for minimal attack surface
+          capabilities:
+            drop:
+            - ALL
+            add:
+            - NET_BIND_SERVICE
+          # Read-only root filesystem for security
+          readOnlyRootFilesystem: true
+        
+        # Startup probe for initial container readiness
+        startupProbe:
+          httpGet:
+            path: /ping
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 30
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 10
+          successThreshold: 1
+        
+        # Liveness probe for container health monitoring
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 60
+          periodSeconds: 30
+          timeoutSeconds: 10
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Readiness probe for service availability
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: http
+            scheme: HTTP
+          initialDelaySeconds: 15
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+          successThreshold: 1
+        
+        # Lifecycle hooks for graceful startup and shutdown
+        lifecycle:
+          preStop:
+            exec:
+              command:
+              - /bin/bash
+              - -c
+              - |
+                # Graceful shutdown sequence
+                echo "Initiating graceful shutdown of InfluxDB..."
+                # Give time for active connections to complete
+                sleep 10
+                # Send SIGTERM to InfluxDB process
+                pkill -TERM influxd
+                # Wait for process to terminate gracefully
+                sleep 30
+      
+      # Init containers for setup and validation
+      initContainers:
+      - name: storage-permissions
+        image: busybox:1.36
+        command:
+        - /bin/sh
+        - -c
+        - |
+          # Ensure correct permissions on data directory
+          chown -R 1000:1000 /var/lib/influxdb2
+          chmod -R 755 /var/lib/influxdb2
+        volumeMounts:
+        - name: influxdb-storage
+          mountPath: /var/lib/influxdb2
+        securityContext:
+          runAsUser: 0
+          runAsGroup: 0
+      
+      # Volume definitions
+      volumes:
+      # Persistent storage for InfluxDB data
+      - name: influxdb-storage
+        persistentVolumeClaim:
+          claimName: influxdb-pvc
+      
+      # ConfigMap volume for configuration files
+      - name: influxdb-config-volume
+        configMap:
+          name: influxdb-config
+          defaultMode: 0644
+      
+      # Temporary directory volume (emptyDir for security)
+      - name: tmp-volume
+        emptyDir:
+          sizeLimit: 1Gi
+      
+      # Node selector for optimal placement (optional)
+      nodeSelector:
+        kubernetes.io/os: linux
+        # Uncomment for specific node requirements
+        # node-type: monitoring
+      
+      # Tolerations for dedicated monitoring nodes (optional)
+      tolerations:
+      - key: "monitoring"
+        operator: "Equal"
+        value: "true"
+        effect: "NoSchedule"
+      
+      # Pod affinity rules for high availability
+      affinity:
+        # Prefer scheduling on different nodes for resilience
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 100
+            podAffinityTerm:
+              labelSelector:
+                matchExpressions:
+                - key: app
+                  operator: In
+                  values:
+                  - influxdb
+              topologyKey: kubernetes.io/hostname
+        
+        # Node affinity for monitoring infrastructure
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+          - weight: 50
+            preference:
+              matchExpressions:
+              - key: node-role.kubernetes.io/monitoring
+                operator: In
+                values:
+                - "true"
+      
+      # Restart policy for container failures
+      restartPolicy: Always
+      
+      # DNS policy for service discovery
+      dnsPolicy: ClusterFirst
+      
+      # Image pull secrets (if using private registry)
+      # imagePullSecrets:
+      # - name: private-registry-secret
+
+---
+# ServiceAccount for RBAC
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: influxdb-service-account
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+  annotations:
+    description: "Service account for InfluxDB deployment with minimal required permissions"
+
+---
+# Role for InfluxDB specific permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: influxdb-role
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+rules:
+# Minimal permissions for InfluxDB operation
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list"]
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list"]
+
+---
+# RoleBinding to associate ServiceAccount with Role
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: influxdb-role-binding
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+subjects:
+- kind: ServiceAccount
+  name: influxdb-service-account
+  namespace: monitoring
+roleRef:
+  kind: Role
+  name: influxdb-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# PodDisruptionBudget for high availability
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: influxdb-pdb
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: influxdb
+      component: time-series-database
+
+---
+# NetworkPolicy for security (restrict ingress/egress)
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: influxdb-network-policy
+  namespace: monitoring
+  labels:
+    app: influxdb
+    component: time-series-database
+spec:
+  podSelector:
+    matchLabels:
+      app: influxdb
+      component: time-series-database
+  policyTypes:
+  - Ingress
+  - Egress
+  
+  # Ingress rules - allow connections from monitoring stack
+  ingress:
+  - from:
+    # Allow from Prometheus for metrics scraping
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+      podSelector:
+        matchLabels:
+          app: prometheus
+    # Allow from Grafana for data queries
+    - namespaceSelector:
+        matchLabels:
+          name: monitoring
+      podSelector:
+        matchLabels:
+          app: grafana
+    # Allow from application services
+    - namespaceSelector:
+        matchLabels:
+          name: financial-services
+    ports:
+    - protocol: TCP
+      port: 8086
+  
+  # Egress rules - restrict outbound connections
+  egress:
+  # Allow DNS resolution
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow HTTPS for updates and external time sync
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+  # Allow NTP for time synchronization (critical for financial services)
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 123
